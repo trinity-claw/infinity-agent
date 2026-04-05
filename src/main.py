@@ -7,21 +7,22 @@ The application factory pattern keeps the app testable and configurable.
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from src.agents.graph import build_swarm
+import src.container as container
 from src.api.middleware import setup_middleware
-from src.api.v1.routes import chat, health
-from src.domain.ports.knowledge_store import KnowledgeStore
-from src.infrastructure.persistence.in_memory_ticket_repo import InMemoryTicketRepository
-from src.infrastructure.persistence.in_memory_user_repo import InMemoryUserRepository
-from src.infrastructure.search.duckduckgo_searcher import DuckDuckGoSearcher
-from src.infrastructure.vector_store.chroma_store import ChromaKnowledgeStore
+from src.api.v1.routes import chat, escalation, health
 from src.settings import settings
+
+# Re-export so existing callers (e.g. tests) that reference src.main.get_swarm
+# continue to work without modification.
+get_knowledge_store = container.get_knowledge_store
+get_swarm = container.get_swarm
 
 # Configure logging
 logging.basicConfig(
@@ -30,34 +31,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
-
-# ============================================================================
-# Dependency Singletons (Composition Root)
-# ============================================================================
-
-_knowledge_store: ChromaKnowledgeStore | None = None
-_swarm = None
-
-
-def get_knowledge_store() -> ChromaKnowledgeStore:
-    """Get or create the knowledge store singleton."""
-    global _knowledge_store
-    if _knowledge_store is None:
-        _knowledge_store = ChromaKnowledgeStore()
-    return _knowledge_store
-
-
-def get_swarm():
-    """Get or create the agent swarm singleton."""
-    global _swarm
-    if _swarm is None:
-        _swarm = build_swarm(
-            knowledge_store=get_knowledge_store(),
-            web_searcher=DuckDuckGoSearcher(),
-            user_repo=InMemoryUserRepository(),
-            ticket_repo=InMemoryTicketRepository(),
-        )
-    return _swarm
 
 
 # ============================================================================
@@ -79,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("   OpenRouter API: configured ✅")
 
     # Initialize singletons
-    store = get_knowledge_store()
+    store = container.get_knowledge_store()
     stats = await store.get_collection_stats()
     logger.info("   Knowledge Base: %d documents ✅", stats["count"])
 
@@ -89,7 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
 
     # Build the swarm
-    get_swarm()
+    container.get_swarm()
     logger.info("   Agent Swarm: ready ✅")
     logger.info("🟢 Infinity Agent is ready at http://%s:%d", settings.app_host, settings.app_port)
 
@@ -119,10 +92,9 @@ def create_app() -> FastAPI:
     # API Routes (v1)
     app.include_router(chat.router, prefix="/v1")
     app.include_router(health.router, prefix="/v1")
+    app.include_router(escalation.router, prefix="/v1")
 
     # Static files for frontend (if the directory exists)
-    import os
-
     frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
     if os.path.exists(frontend_path):
         app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

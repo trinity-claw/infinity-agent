@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     enable_streaming: bool = True
     enable_sentiment_agent: bool = True
 
+    # --- WhatsApp Escalation ---
+    whatsapp_enabled: bool = False
+    whatsapp_api_url: str = ""           # e.g. https://your-evolution-api-host
+    whatsapp_api_token: str = ""         # Evolution API: apikey header
+    whatsapp_instance: str = "main"      # Evolution API instance name
+    whatsapp_operator_number: str = ""   # E.164 digits only: 5511999999999
+
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
