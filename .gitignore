@@ -43,3 +43,5 @@ htmlcov/
 # promptfoo
 .promptfoo/
 .gstack/
+
+#private_docs/
