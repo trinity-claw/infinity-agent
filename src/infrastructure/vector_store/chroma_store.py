@@ -102,6 +102,53 @@ class ChromaKnowledgeStore(KnowledgeStore):
             "persist_dir": self._persist_dir,
         }
 
+    async def get_documents_preview(
+        self, limit: int = 20, offset: int = 0
+    ) -> dict[str, Any]:
+        """Return a paginated preview of documents in the collection.
+
+        Useful for inspecting what has been ingested into ChromaDB.
+        """
+        total = self._collection.count()
+        if total == 0:
+            return {"total": 0, "offset": offset, "limit": limit, "documents": []}
+
+        results = self._collection.get(
+            limit=limit,
+            offset=offset,
+            include=["documents", "metadatas"],
+        )
+
+        documents = []
+        for i, doc_id in enumerate(results.get("ids", [])):
+            doc_text = results["documents"][i] if results.get("documents") else ""
+            metadata = results["metadatas"][i] if results.get("metadatas") else {}
+            documents.append(
+                {
+                    "id": doc_id,
+                    "snippet": doc_text[:200] + ("..." if len(doc_text) > 200 else ""),
+                    "char_count": len(doc_text),
+                    "source_url": metadata.get("source_url", ""),
+                    "title": metadata.get("title", ""),
+                    "chunk_index": metadata.get("chunk_index", 0),
+                }
+            )
+
+        # Aggregate source URLs
+        all_meta = self._collection.get(include=["metadatas"])
+        sources: dict[str, int] = {}
+        for m in (all_meta.get("metadatas") or []):
+            url = m.get("source_url", "unknown") if m else "unknown"
+            sources[url] = sources.get(url, 0) + 1
+
+        return {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "documents": documents,
+            "sources": [{"url": k, "chunks": v} for k, v in sorted(sources.items())],
+        }
+
     async def health_check(self) -> bool:
         """Check if ChromaDB is operational."""
         try:
