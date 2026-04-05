@@ -34,24 +34,30 @@ const ChatInput = ({ onSendMessage, disabled }) => {
   };
 
   return (
-    <div className="input-wrapper">
-      <form id="chatForm" onSubmit={handleSubmit}>
-        <textarea 
-          ref={textareaRef}
-          id="userInput" 
-          placeholder="Digite sua mensagem aqui..." 
-          rows="1"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-        />
-        <button type="submit" id="sendBtn" disabled={!text.trim() || disabled}>
-          <svg viewBox="0 0 24 24" width="24" height="24">
-            <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
-          </svg>
-        </button>
-      </form>
+    <div className="input-area">
+      <div className="input-wrapper">
+        <form id="chatForm" onSubmit={handleSubmit}>
+          <textarea 
+            ref={textareaRef}
+            id="userInput" 
+            placeholder="Digite sua mensagem ou use as sugestões acima..." 
+            rows="1"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+          />
+          <button type="submit" id="sendBtn" disabled={!text.trim() || disabled}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M22 2L11 13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </form>
+      </div>
+      <div className="input-actions">
+        <p className="input-hint">Enter para enviar · Shift+Enter para nova linha</p>
+      </div>
     </div>
   );
 };

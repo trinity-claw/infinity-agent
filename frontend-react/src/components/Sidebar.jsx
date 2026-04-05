@@ -14,29 +14,45 @@ const Sidebar = ({ onClearChat }) => {
 
   return (
     <div className="sidebar">
-      <div className="logo-container">
-        <img src={logo} alt="InfinitePay" />
+      <div className="sidebar-header">
+        <div className="logo-pill">
+          <img src={logo} alt="InfinitePay" className="logo-img" />
+        </div>
+        <div className="sidebar-header-right">
+          <span className="badge-ai">AI SWARM</span>
+        </div>
       </div>
       
-      <div className="user-settings">
-        <label htmlFor="userIdInput">ID do Usuário / Telefone</label>
-        <input 
-          type="text" 
-          id="userIdInput" 
-          value={userId}
-          onChange={handleUserIdChange}
-          placeholder="Ex: 5511999999999" 
-        />
-        <small>Útil para testar a ponte do WhatsApp (escalonamento)</small>
+      <div className="sidebar-section">
+        <div className="sidebar-label">Mock Auth</div>
+        <div className="user-id-wrapper">
+          <label htmlFor="userIdInput">Telefone/ID:</label>
+          <input 
+            type="text" 
+            id="userIdInput" 
+            value={userId}
+            onChange={handleUserIdChange}
+            placeholder="Ex: 5511999999999" 
+          />
+        </div>
       </div>
 
-      <div className="action-buttons">
-        <button id="clearBtn" onClick={onClearChat} className="secondary-btn">Limpar Histórico</button>
+      <div className="sidebar-section">
+        <div className="sidebar-label">System Actions</div>
+        <div className="quick-actions">
+          <button id="clearBtn" onClick={onClearChat} className="quick-btn">Limpar Histórico Local</button>
+        </div>
       </div>
 
       <div className="sidebar-footer">
-        <p>Infinity Agent v1.0</p>
-        <p className="status-indicator"><span className="dot"></span> Online</p>
+        <div className="status-row">
+          <span className="status-dot online"></span>
+          <span>System Online</span>
+        </div>
+        <div className="health-info">
+          Infinity Agent v1.0 <br />
+          LangGraph SQLite
+        </div>
       </div>
     </div>
   );
