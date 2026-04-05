@@ -14,6 +14,12 @@ env/
 
 # Environment Variables
 .env
+.env.*
+!.env.example
+frontend-react/.env
+frontend-react/.env*
+!frontend-react/.env.example
+frontend-react/.env.local
 
 # IDE
 .vscode/
@@ -27,6 +33,12 @@ Thumbs.db
 
 # ChromaDB Data
 data/chroma_db/
+data/
+data/langgraph.sqlite
+
+# Frontend build/dependencies
+frontend-react/node_modules/
+frontend-react/dist/
 
 # uv
 uv.lock
@@ -45,3 +57,12 @@ htmlcov/
 .gstack/
 
 #private_docs/
+private_docs/
+.superdesign
+
+# Local migration snapshots (keep local, do not version)
+old_*.js
+old_*.html
+proper_*.js
+proper_*.html
+package-lock.json
