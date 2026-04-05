@@ -10,39 +10,11 @@ import logging
 
 from langchain_core.messages import AIMessage
 
+from src.agents.guardrails.blocklist import BLOCKED_TOPICS, INJECTION_PATTERNS
 from src.agents.state import AgentState
 from src.settings import settings
 
 logger = logging.getLogger(__name__)
-
-# Patterns that indicate prompt injection attempts
-INJECTION_PATTERNS = [
-    "ignore previous instructions",
-    "ignore all instructions",
-    "ignore your instructions",
-    "you are now",
-    "act as",
-    "pretend you are",
-    "forget everything",
-    "disregard",
-    "reveal your prompt",
-    "show me your system prompt",
-    "what are your instructions",
-    "DAN mode",
-    "jailbreak",
-    "ignore safety",
-]
-
-# Topics that should be deflected
-BLOCKED_TOPICS = [
-    "how to hack",
-    "how to commit",
-    "illegal",
-    "drugs",
-    "weapons",
-    "violence",
-    "explicit content",
-]
 
 
 async def input_guard_node(state: AgentState) -> dict:
