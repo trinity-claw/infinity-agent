@@ -41,11 +41,23 @@ async def sentiment_node(state: AgentState) -> dict:
     """
     llm = get_sentiment_llm().bind_tools(_SENTIMENT_TOOLS)
     user_id = state.get("user_id", "unknown")
+    authenticated_user = state.get("metadata", {}).get("authenticated_user", {})
+    auth_name = authenticated_user.get("name", "")
+    auth_email = authenticated_user.get("email", "")
+
+    profile_lines = []
+    if auth_name:
+        profile_lines.append(f"- Authenticated name: {auth_name}")
+    if auth_email:
+        profile_lines.append(f"- Authenticated email: {auth_email}")
+    profile_block = "\n".join(profile_lines) if profile_lines else "- No authenticated profile provided."
 
     context_prompt = (
         f"{SENTIMENT_SYSTEM_PROMPT}\n\n"
         f"## Current Session\n"
-        f"Customer user_id: {user_id}"
+        f"Customer user_id: {user_id}\n"
+        f"{profile_block}\n"
+        f"When calming or escalating, use authenticated name if available."
     )
 
     messages = [SystemMessage(content=context_prompt)] + list(state["messages"])

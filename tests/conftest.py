@@ -1,8 +1,9 @@
 """Shared pytest fixtures."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.fixture
@@ -29,8 +30,8 @@ def mock_swarm():
 @pytest.fixture
 def app(mock_swarm):
     """FastAPI test app with mocked swarm."""
-    with patch("src.main.get_swarm", return_value=mock_swarm), \
-         patch("src.main.get_knowledge_store") as mock_store:
+    with patch("src.container.get_swarm", new=AsyncMock(return_value=mock_swarm)), \
+         patch("src.container.get_knowledge_store") as mock_store:
 
         mock_store.return_value.get_collection_stats = AsyncMock(return_value={"count": 42})
         mock_store.return_value.health_check = AsyncMock(return_value=True)

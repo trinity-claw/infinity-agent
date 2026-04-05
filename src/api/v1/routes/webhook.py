@@ -12,6 +12,7 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from langchain_core.messages import HumanMessage
 
 import src.container as container
+from src.agents.swarm_config import build_swarm_config
 from src.infrastructure.whatsapp import client as whatsapp_client
 from src.infrastructure.whatsapp.session_store import session_store
 from src.settings import settings
@@ -36,12 +37,20 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
             )
         return
 
-    swarm = container.get_swarm()
+    swarm = await container.get_swarm()
+    config = build_swarm_config(
+        thread_id=phone,
+        checkpoint_ns="whatsapp",
+        fallback_thread_id="whatsapp_user",
+    )
+    configurable = config["configurable"]
+    thread_id = configurable["thread_id"]
+    checkpoint_ns = configurable["checkpoint_ns"]
 
     # Initial state
     initial_state = {
         "messages": [HumanMessage(content=text)],
-        "user_id": phone,
+        "user_id": thread_id,
         "intent": "",
         "language": "pt-BR",
         "agent_route": "",
@@ -52,12 +61,14 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
         "metadata": {},
     }
 
-    # Configuration for LangGraph SQLite Checkpointer
-    # This associates the thread history with the user's phone number!
-    config = {"configurable": {"thread_id": phone}}
-
     try:
-        logger.info("[Webhook] Invoking swarm for user %s: %s", phone, text[:50])
+        logger.info(
+            "[Webhook] Invoking swarm user=%s thread_id=%s checkpoint_ns=%s message_id=%s",
+            phone,
+            thread_id,
+            checkpoint_ns,
+            message_id,
+        )
         result = await swarm.ainvoke(initial_state, config=config)
 
         # Extract final AI response
@@ -82,7 +93,15 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
             logger.info("[Webhook] Simulated reply to %s: %s", phone, wa_text)
 
     except Exception as exc:
-        logger.error("[Webhook] Error processing swarm for %s: %s", phone, exc, exc_info=True)
+        logger.error(
+            "[Webhook] Error processing swarm user=%s thread_id=%s checkpoint_ns=%s message_id=%s: %s",
+            phone,
+            thread_id,
+            checkpoint_ns,
+            message_id,
+            exc,
+            exc_info=True,
+        )
         if settings.whatsapp_enabled:
             whatsapp_client.send_message(
                 phone,

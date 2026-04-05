@@ -13,14 +13,26 @@ from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    """Incoming chat request — matches the challenge specification."""
+    """Incoming chat request."""
 
     message: str = Field(..., min_length=1, max_length=5000, description="User message")
     user_id: str = Field(..., min_length=1, max_length=100, description="User identifier")
+    user_name: Optional[str] = Field(
+        default=None,
+        max_length=120,
+        description="Authenticated user display name from Google Sign-In.",
+    )
+    user_email: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description="Authenticated user email from Google Sign-In.",
+    )
     session_id: Optional[str] = Field(
         default=None,
-        description="Active escalation session ID — if provided, message is forwarded "
-                    "to the human operator instead of the AI swarm.",
+        description=(
+            "Active escalation session ID. If provided, message is forwarded "
+            "to the human operator instead of the AI swarm."
+        ),
     )
 
 

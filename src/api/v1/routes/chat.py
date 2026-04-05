@@ -1,17 +1,14 @@
-"""Chat route — The main API endpoint.
-
-POST /v1/chat accepts {message, user_id} and processes through the agent swarm.
-"""
+"""Chat route."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 
 import src.container as container
+from src.agents.swarm_config import build_swarm_config, sanitize_identifier
 from src.api.v1.schemas import ChatRequest, ChatResponse, ErrorResponse
 from src.infrastructure.whatsapp import client as whatsapp_client
 from src.infrastructure.whatsapp.session_store import session_store
@@ -20,6 +17,20 @@ from src.settings import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Chat"])
+
+
+def _build_authenticated_user(request: ChatRequest) -> dict[str, str]:
+    """Extract authenticated profile fields from the request."""
+    profile: dict[str, str] = {}
+    if request.user_name:
+        clean_name = request.user_name.strip()
+        if clean_name:
+            profile["name"] = clean_name
+    if request.user_email:
+        clean_email = request.user_email.strip().lower()
+        if clean_email:
+            profile["email"] = clean_email
+    return profile
 
 
 @router.post(
@@ -37,15 +48,20 @@ router = APIRouter(tags=["Chat"])
     ),
 )
 async def chat(request: ChatRequest) -> ChatResponse:
-    """Main chat endpoint — the entry point for all user messages.
+    """Main chat endpoint."""
+    authenticated_user = _build_authenticated_user(request)
+    fallback_user = sanitize_identifier(authenticated_user.get("email"), fallback="client_web")
+    thread_id = sanitize_identifier(request.user_id, fallback=fallback_user)
+    swarm_config = build_swarm_config(
+        thread_id=thread_id,
+        checkpoint_ns="chat",
+        fallback_thread_id=fallback_user,
+    )
+    configurable = swarm_config["configurable"]
+    thread_id = configurable["thread_id"]
+    checkpoint_ns = configurable["checkpoint_ns"]
+    sender_label = authenticated_user.get("name", thread_id)
 
-    Flow:
-    1. Validate the request
-    2. Create the initial agent state
-    3. Invoke the LangGraph swarm
-    4. Extract and return the agent response
-    """
-    # ── Escalated session: forward directly to operator, skip swarm ──────────
     if request.session_id:
         session = session_store.get_session(request.session_id)
         if session and session.active:
@@ -53,27 +69,35 @@ async def chat(request: ChatRequest) -> ChatResponse:
             if settings.whatsapp_enabled:
                 whatsapp_client.send_message(
                     session.operator_number,
-                    f"*{request.user_id}:* {request.message}",
+                    f"*{sender_label}:* {request.message}",
                 )
+
+            metadata = {
+                "escalated": True,
+                "guardrail_blocked": False,
+                "session_id": request.session_id,
+            }
+            if authenticated_user:
+                metadata["authenticated_user"] = authenticated_user
+
             return ChatResponse(
                 response="Mensagem enviada ao atendente. Aguarde a resposta.",
                 agent_used="human",
                 intent="escalation",
                 language="pt-BR",
-                metadata={
-                    "escalated": True,
-                    "guardrail_blocked": False,
-                    "session_id": request.session_id,
-                },
+                metadata=metadata,
             )
 
-    swarm = container.get_swarm()
-
     try:
-        # Build initial state
+        swarm = await container.get_swarm()
+
+        initial_metadata: dict = {}
+        if authenticated_user:
+            initial_metadata["authenticated_user"] = authenticated_user
+
         initial_state = {
             "messages": [HumanMessage(content=request.message)],
-            "user_id": request.user_id,
+            "user_id": thread_id,
             "intent": "",
             "language": "pt-BR",
             "agent_route": "",
@@ -81,27 +105,32 @@ async def chat(request: ChatRequest) -> ChatResponse:
             "escalated": False,
             "guardrail_blocked": False,
             "guardrail_reason": "",
-            "metadata": {},
+            "metadata": initial_metadata,
         }
 
-        # Invoke the swarm
-        logger.info("Processing message for user=%s: %s", request.user_id, request.message[:100])
-        result = await swarm.ainvoke(initial_state)
+        logger.info(
+            "Invoking swarm user=%s thread_id=%s checkpoint_ns=%s",
+            request.user_id,
+            thread_id,
+            checkpoint_ns,
+        )
 
-        # Extract the final response (last AI message)
+        result = await swarm.ainvoke(
+            initial_state,
+            config=swarm_config,
+        )
+
         response_text = ""
         agent_used = "router"
-
-        for msg in reversed(result.get("messages", [])):
-            if hasattr(msg, "content") and msg.content:
-                name = getattr(msg, "name", "")
-                # Skip internal router messages
-                if name != "router" and name != "guardrail":
-                    response_text = msg.content
+        for message in reversed(result.get("messages", [])):
+            if hasattr(message, "content") and message.content:
+                name = getattr(message, "name", "")
+                if name not in {"router", "guardrail"}:
+                    response_text = message.content
                     agent_used = name or "unknown"
                     break
-                elif name == "guardrail":
-                    response_text = msg.content
+                if name == "guardrail":
+                    response_text = message.content
                     agent_used = "guardrail"
                     break
 
@@ -110,9 +139,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         extra_metadata: dict = {}
         if result.get("escalated", False):
-            active_session = session_store.get_session_by_user(request.user_id)
+            active_session = session_store.get_session_by_user(thread_id)
             if active_session:
                 extra_metadata["session_id"] = active_session.session_id
+        if authenticated_user:
+            extra_metadata["authenticated_user"] = authenticated_user
 
         return ChatResponse(
             response=response_text,
@@ -126,10 +157,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 **extra_metadata,
             },
         )
-
-    except Exception as e:
-        logger.error("Error processing chat message: %s", str(e), exc_info=True)
+    except Exception as exc:
+        logger.error(
+            "Error processing chat message user=%s thread_id=%s checkpoint_ns=%s: %s",
+            request.user_id,
+            thread_id,
+            checkpoint_ns,
+            str(exc),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
-            detail=f"Internal error processing message: {str(e)}",
-        )
+            detail=f"Internal error processing message: {str(exc)}",
+        ) from exc

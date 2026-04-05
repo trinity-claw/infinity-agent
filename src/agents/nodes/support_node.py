@@ -46,12 +46,25 @@ def create_support_node(
         """
         llm = get_support_llm().bind_tools(tools)
         user_id = state.get("user_id", "unknown")
+        authenticated_user = state.get("metadata", {}).get("authenticated_user", {})
+        auth_name = authenticated_user.get("name", "")
+        auth_email = authenticated_user.get("email", "")
 
-        # Inject user_id context into the system prompt
+        profile_lines = []
+        if auth_name:
+            profile_lines.append(f"- Authenticated name: {auth_name}")
+        if auth_email:
+            profile_lines.append(f"- Authenticated email: {auth_email}")
+
+        profile_block = "\n".join(profile_lines) if profile_lines else "- No authenticated profile provided."
+
+        # Inject session context into the system prompt
         context_prompt = (
             f"{SUPPORT_SYSTEM_PROMPT}\n\n"
             f"## Current Session\n"
             f"Current customer user_id: {user_id}\n"
+            f"{profile_block}\n"
+            f"If authenticated name is present, use it for personalization when appropriate.\n"
             f"Always use this user_id when calling tools."
         )
 

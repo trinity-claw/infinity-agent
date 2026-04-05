@@ -43,9 +43,24 @@ def create_knowledge_node(
         - General questions → search_web
         """
         llm = get_knowledge_llm().bind_tools(tools)
-        messages = [SystemMessage(content=KNOWLEDGE_SYSTEM_PROMPT)] + list(
-            state["messages"]
+        authenticated_user = state.get("metadata", {}).get("authenticated_user", {})
+        auth_name = authenticated_user.get("name", "")
+        auth_email = authenticated_user.get("email", "")
+
+        profile_lines = []
+        if auth_name:
+            profile_lines.append(f"- Authenticated name: {auth_name}")
+        if auth_email:
+            profile_lines.append(f"- Authenticated email: {auth_email}")
+
+        profile_block = "\n".join(profile_lines) if profile_lines else "- No authenticated profile provided."
+        context_prompt = (
+            f"{KNOWLEDGE_SYSTEM_PROMPT}\n\n"
+            f"## Session Context\n"
+            f"{profile_block}\n"
+            f"If authenticated name is available and it sounds natural, personalize the greeting."
         )
+        messages = [SystemMessage(content=context_prompt)] + list(state["messages"])
 
         # First call: LLM decides which tool(s) to use
         response = await llm.ainvoke(messages)
