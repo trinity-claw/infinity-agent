@@ -11,7 +11,7 @@
 
 ## Visão Geral
 
-O **Infinity Agent** é um sistema de IA que processa mensagens de usuários e as roteia para agentes especializados usando [LangGraph](https://langchain-ai.github.io/langgraph/). Cada agente tem ferramentas específicas e modelos LLM otimizados para sua função.
+O **Infinity Agent** é um sistema de IA que processa mensagens de usuários da web ou WhatsApp nativo, e as roteia para agentes especializados usando [LangGraph](https://langchain-ai.github.io/langgraph/). Cada agente tem ferramentas específicas e modelos LLM otimizados para sua função.
 
 ```
                     ┌─────────────┐
@@ -101,16 +101,14 @@ O **Infinity Agent** é um sistema de IA que processa mensagens de usuários e a
 
 | Camada | Tecnologia |
 |--------|------------|
-| API | FastAPI 0.115 + Uvicorn |
-| Orquestração | LangGraph 0.4 (StateGraph) |
+| API & Webhooks | FastAPI 0.115 + Uvicorn + BackgroundTasks |
+| Orquestração | LangGraph 0.4 (StateGraph) + SQLite Checkpointer |
+| WhatsApp Bridge | Evolution API (Daemon Nativo p/ conversas) |
 | LLMs | OpenRouter (GPT-4o-mini + Claude Sonnet 4.5) |
 | Vector DB | ChromaDB (embedded, persistente) |
-| Busca Web | DuckDuckGo Search (sem API key) |
-| Scraping | httpx + BeautifulSoup4 |
-| Frontend | HTML/CSS/JS (glassmorphism) |
-| Container | Docker multi-stage + docker-compose |
-| Config | Pydantic Settings |
-| Testes | pytest + pytest-asyncio |
+| Avaliação (Evall) | Promptfoo (Integração customizada com LangGraph) |
+| Busca Web | DuckDuckGo Search |
+| Frontend | HTML/CSS/JS (Glassmorphism minimalista) |
 
 ---
 
@@ -224,24 +222,24 @@ O chat estará disponível em `http://localhost:8000`.
 
 ---
 
-## Testes
+## Testes e Avaliações
+
+O projeto mescla a validação através das ferramentas padrões do mercado de IA:
+
+### 1. Pytest (Testes de Integração e Unitários)
+```bash
+# Rodar todos os testes de software com cobertura
+pytest tests/ -v --cov=src --cov-report=term-missing
+```
+
+### 2. Promptfoo (Avaliação Contínua de Agentes e Prompts)
+Criamos um **Custom Python Provider** para o `Promptfoo` que evala todas as decisões heurísticas do sistema.
 
 ```bash
-# Instalar dependências de dev
-uv pip install -e ".[dev]"
-
-# Rodar todos os testes
-pytest tests/ -v
-
-# Com cobertura
-pytest tests/ -v --cov=src --cov-report=term-missing
-
-# Apenas testes unitários
-pytest tests/unit/ -v
-
-# Apenas testes de integração
-pytest tests/integration/ -v
+# Roda a tabela de avaliação do roteador e guardrails
+npx promptfoo@latest eval
 ```
+Isso testará intensamente se as blindagens estão interceptando *Prompt Injections* e se o roteador de Swarm acerta exatamente os Agentes pretendidos (Ex: Support agent quando pede conta, Knowledge se pergunta "O que é o Jim").
 
 ---
 
