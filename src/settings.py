@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     chroma_persist_dir: str = "./data/chroma_db"
 
     # --- Application ---
+    sqlite_db_path: str = "./data/langgraph.sqlite"
     app_env: str = "development"
     app_debug: bool = True
     app_host: str = "0.0.0.0"

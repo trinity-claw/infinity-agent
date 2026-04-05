@@ -17,6 +17,7 @@ dependencies = [
 
     # Agent Orchestration
     "langgraph>=0.4.0",
+    "langgraph-checkpoint-sqlite>=3.0.0",
     "langchain-core>=0.3.0",
     "langchain-community>=0.3.0",
     "langchain-openrouter>=0.2.0",

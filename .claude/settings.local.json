@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python:*)",
+      "Skill(browse)",
+      "Skill(gstack-upgrade)",
+      "Skill(plan-eng-review)"
+    ]
+  }
+}

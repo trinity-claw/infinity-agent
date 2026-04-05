@@ -7,7 +7,7 @@ and routing logic into a single compiled LangGraph StateGraph.
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Literal, Any
 
 from langgraph.graph import END, START, StateGraph
 
@@ -54,6 +54,7 @@ def build_swarm(
     web_searcher: WebSearcher,
     user_repo: UserRepository,
     ticket_repo: TicketRepository,
+    checkpointer: Any = None,
 ) -> StateGraph:
     """Build and compile the agent swarm StateGraph.
 
@@ -118,4 +119,4 @@ def build_swarm(
 
     logger.info("Agent swarm graph built successfully")
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)

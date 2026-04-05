@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 import src.container as container
 from src.api.middleware import setup_middleware
-from src.api.v1.routes import chat, escalation, health
+from src.api.v1.routes import chat, escalation, health, webhook
 from src.settings import settings
 
 # Re-export so existing callers (e.g. tests) that reference src.main.get_swarm
@@ -93,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/v1")
     app.include_router(health.router, prefix="/v1")
     app.include_router(escalation.router, prefix="/v1")
+    app.include_router(webhook.router, prefix="/v1")
 
     # Static files for frontend (if the directory exists)
     frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")

@@ -13,8 +13,10 @@ from src.infrastructure.persistence.in_memory_ticket_repo import InMemoryTicketR
 from src.infrastructure.persistence.in_memory_user_repo import InMemoryUserRepository
 from src.infrastructure.search.duckduckgo_searcher import DuckDuckGoSearcher
 from src.infrastructure.vector_store.chroma_store import ChromaKnowledgeStore
+from src.settings import settings
 
 _knowledge_store: ChromaKnowledgeStore | None = None
+_checkpointer = None
 _swarm = None
 
 
@@ -24,6 +26,21 @@ def get_knowledge_store() -> ChromaKnowledgeStore:
     if _knowledge_store is None:
         _knowledge_store = ChromaKnowledgeStore()
     return _knowledge_store
+
+
+def get_checkpointer():
+    """Return the LangGraph SQLite checkpointer singleton (lazy-init)."""
+    global _checkpointer
+    if _checkpointer is None:
+        import os
+        from langgraph.checkpoint.sqlite import SqliteSaver
+        
+        # Ensure directory exists
+        db_path = settings.sqlite_db_path
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        
+        _checkpointer = SqliteSaver.from_conn_string(db_path)
+    return _checkpointer
 
 
 def get_swarm():
@@ -42,5 +59,6 @@ def get_swarm():
             web_searcher=DuckDuckGoSearcher(),
             user_repo=InMemoryUserRepository(),
             ticket_repo=InMemoryTicketRepository(),
+            checkpointer=get_checkpointer(),
         )
     return _swarm

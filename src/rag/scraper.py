@@ -34,6 +34,17 @@ INFINITEPAY_URLS = [
     "https://www.infinitepay.io/emprestimo",
     "https://www.infinitepay.io/cartao",
     "https://www.infinitepay.io/rendimento",
+    # JIM Knowledge Base
+    "https://ajuda.infinitepay.io/pt-BR/articles/14088698-como-fazer-pagamentos-pelo-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/14088921-como-acompanhar-minhas-financas-pelo-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/14089162-como-criar-imagens-profissionais-com-o-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/13919788-como-criar-e-personalizar-seu-site-com-o-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/10538821-como-o-jim-funciona-conheca-seu-assistente-que-faz-tudo",
+    "https://ajuda.infinitepay.io/pt-BR/articles/14089069-como-criar-campanhas-e-conteudo-de-marketing-com-o-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/14089032-como-calcular-preco-e-margem-de-lucro-com-o-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/14089187-como-criar-lembretes-e-organizar-minha-agenda-com-o-jim",
+    "https://ajuda.infinitepay.io/pt-BR/articles/14089239-como-o-jim-aprende-sobre-meu-negocio-e-personaliza-as-respostas",
+    "https://ajuda.infinitepay.io/pt-BR/articles/11481595-como-funciona-o-radar-de-boletos-no-jim",
 ]
 
 
@@ -100,6 +111,8 @@ def _url_to_section(url: str) -> str:
         "cartao": "cartao",
         "rendimento": "rendimento",
     }
+    if "ajuda.infinitepay.io/pt-BR/articles/" in url and "jim" in url.lower():
+        return "jim"
     return section_map.get(path, path or "unknown")
 
 
