@@ -61,9 +61,9 @@ async def input_guard_node(state: AgentState) -> dict:
     last_message = state["messages"][-1]
     content = last_message.content.lower() if hasattr(last_message, "content") else ""
 
-    # Check for prompt injection
+    # Check for prompt injection (compare lowercase to lowercase)
     for pattern in INJECTION_PATTERNS:
-        if pattern in content:
+        if pattern.lower() in content:
             logger.warning("Input guardrail: prompt injection detected: %s", pattern)
             return {
                 "guardrail_blocked": True,
@@ -71,9 +71,9 @@ async def input_guard_node(state: AgentState) -> dict:
                 "messages": [
                     AIMessage(
                         content=(
-                            "I'm sorry, but I can only help with questions about "
-                            "InfinitePay products, services, and account support. "
-                            "How can I assist you today?"
+                            "Desculpe, só posso ajudar com perguntas sobre os produtos, "
+                            "serviços e suporte da InfinitePay. "
+                            "Como posso te ajudar?"
                         ),
                         name="guardrail",
                     )
@@ -90,9 +90,9 @@ async def input_guard_node(state: AgentState) -> dict:
                 "messages": [
                     AIMessage(
                         content=(
-                            "I'm designed to help with InfinitePay-related questions "
-                            "and general knowledge inquiries. I'm unable to assist with "
-                            "that particular topic. How else can I help?"
+                            "Fui desenvolvido para ajudar com perguntas sobre a InfinitePay "
+                            "e questões gerais de conhecimento. Não consigo ajudar com esse "
+                            "assunto específico. Em que mais posso te ajudar?"
                         ),
                         name="guardrail",
                     )

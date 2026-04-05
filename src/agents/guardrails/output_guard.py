@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import re
 
+from langchain_core.messages import AIMessage
+
 from src.agents.state import AgentState
 from src.settings import settings
 
@@ -65,9 +67,6 @@ async def output_guard_node(state: AgentState) -> dict:
 
     if sanitized_content != original_content:
         logger.info("Output guardrail: PII detected and masked")
-        # Update the last message with sanitized content
-        from langchain_core.messages import AIMessage
-
         return {
             "messages": [
                 AIMessage(
