@@ -1,7 +1,19 @@
 # =============================================================================
 # Infinity Agent — Multi-stage Docker Build
 # =============================================================================
+# =============================================================================
+# Stage 1: Build React Frontend
+# =============================================================================
+FROM node:20-slim AS frontend-builder
+WORKDIR /app
+COPY frontend-react/package*.json ./
+RUN npm ci
+COPY frontend-react/ ./
+RUN npm run build
 
+# =============================================================================
+# Stage 2: Build Python Dependencies
+# =============================================================================
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -29,7 +41,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY src/ ./src/
-COPY frontend/ ./frontend/
+COPY --from=frontend-builder /app/dist ./frontend-react/dist
 COPY scripts/ ./scripts/
 COPY pyproject.toml .
 
