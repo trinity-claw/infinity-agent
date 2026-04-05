@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from src.agents.prompts.knowledge_prompt import KNOWLEDGE_SYSTEM_PROMPT
 from src.agents.state import AgentState
@@ -52,8 +52,6 @@ def create_knowledge_node(
 
         # If tool calls are present, execute them
         if response.tool_calls:
-            from langchain_core.messages import ToolMessage
-
             tool_map = {t.name: t for t in tools}
             tool_results = []
 

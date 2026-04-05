@@ -7,7 +7,7 @@ and are NOT used inside the domain or agent layers.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,11 @@ class ChatRequest(BaseModel):
 
     message: str = Field(..., min_length=1, max_length=5000, description="User message")
     user_id: str = Field(..., min_length=1, max_length=100, description="User identifier")
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Active escalation session ID — if provided, message is forwarded "
+                    "to the human operator instead of the AI swarm.",
+    )
 
 
 class ChatResponse(BaseModel):

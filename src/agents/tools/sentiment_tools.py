@@ -105,20 +105,39 @@ def detect_urgency(text: str) -> str:
 def escalate_to_human(user_id: str, reason: str) -> str:
     """Trigger escalation to a human support agent.
 
-    This creates an escalation record and notifies the support team.
-    Use this when automated support is insufficient.
+    Creates an escalation session, optionally sends a WhatsApp notification
+    to the configured operator number, and returns a reference ID.
 
     Args:
         user_id: The customer's user ID.
         reason: Why this conversation needs human attention.
     """
+    from src.infrastructure.whatsapp import client as whatsapp_client
+    from src.infrastructure.whatsapp.session_store import session_store
+    from src.settings import settings
+
+    operator_number = settings.whatsapp_operator_number or "operator"
+    session_id = session_store.create_session(user_id=user_id, operator_number=operator_number)
+
+    # Notify the operator via WhatsApp (no-op when WHATSAPP_ENABLED=false)
+    if settings.whatsapp_enabled and operator_number != "operator":
+        notification = (
+            f"🚨 *ESCALAMENTO — InfinitePay AI*\n\n"
+            f"*Sessão:* {session_id}\n"
+            f"*Cliente:* {user_id}\n"
+            f"*Motivo:* {reason}\n\n"
+            f"Responda esta mensagem para interagir diretamente com o cliente no chat."
+        )
+        whatsapp_client.send_message(operator_number, notification)
+
     return (
-        f"🚨 ESCALATION TRIGGERED\n"
+        f"ESCALATION TRIGGERED\n"
         f"Customer: {user_id}\n"
         f"Reason: {reason}\n"
+        f"Session: {session_id}\n"
         f"Status: Routed to human agent queue\n"
         f"Estimated wait time: ~5 minutes\n"
-        f"Reference: ESC-{user_id[-4:]}-{hash(reason) % 10000:04d}"
+        f"Reference: {session_id}"
     )
 
 

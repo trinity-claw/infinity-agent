@@ -11,8 +11,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from langchain_core.messages import HumanMessage
 
+import src.container as container
 from src.api.v1.schemas import ChatRequest, ChatResponse, ErrorResponse
-from src.infrastructure.llm.model_factory import get_router_llm  # noqa: F401
+from src.infrastructure.whatsapp import client as whatsapp_client
+from src.infrastructure.whatsapp.session_store import session_store
+from src.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +45,29 @@ async def chat(request: ChatRequest) -> ChatResponse:
     3. Invoke the LangGraph swarm
     4. Extract and return the agent response
     """
-    from src.main import get_swarm
+    # ── Escalated session: forward directly to operator, skip swarm ──────────
+    if request.session_id:
+        session = session_store.get_session(request.session_id)
+        if session and session.active:
+            session_store.add_message(request.session_id, sender="user", content=request.message)
+            if settings.whatsapp_enabled:
+                whatsapp_client.send_message(
+                    session.operator_number,
+                    f"*{request.user_id}:* {request.message}",
+                )
+            return ChatResponse(
+                response="Mensagem enviada ao atendente. Aguarde a resposta.",
+                agent_used="human",
+                intent="escalation",
+                language="pt-BR",
+                metadata={
+                    "escalated": True,
+                    "guardrail_blocked": False,
+                    "session_id": request.session_id,
+                },
+            )
 
-    swarm = get_swarm()
+    swarm = container.get_swarm()
 
     try:
         # Build initial state
@@ -85,6 +108,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
         if not response_text:
             response_text = "I'm sorry, I couldn't process your request. Please try again."
 
+        extra_metadata: dict = {}
+        if result.get("escalated", False):
+            active_session = session_store.get_session_by_user(request.user_id)
+            if active_session:
+                extra_metadata["session_id"] = active_session.session_id
+
         return ChatResponse(
             response=response_text,
             agent_used=agent_used,
@@ -94,6 +123,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 "escalated": result.get("escalated", False),
                 "guardrail_blocked": result.get("guardrail_blocked", False),
                 **result.get("metadata", {}),
+                **extra_metadata,
             },
         )
 
