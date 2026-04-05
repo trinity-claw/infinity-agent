@@ -8,6 +8,9 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-/app/data/chroma_db}
+      - SQLITE_DB_PATH=${SQLITE_DB_PATH:-/app/data/sqlite_db/langgraph.sqlite}
     volumes:
       - chroma_data:/app/data/chroma_db
       - sqlite_data:/app/data/sqlite_db
@@ -27,7 +30,7 @@ services:
       - SERVER_URL=http://localhost:8080
       - DOCKER_ENV=true
       - LOG_LEVEL=ERROR,WARN,DEBUG,INFO,LOG,VERBOSE,DARK,WEBHOOKS
-      - AUTHENTICATION_API_KEY=evoluton_infinity
+      - AUTHENTICATION_API_KEY=${AUTHENTICATION_API_KEY:-change_me_in_env}
     volumes:
       - evolution_instances:/evolution/instances
     restart: unless-stopped

@@ -66,7 +66,7 @@ ENABLE_GUARDRAILS=True
 # --- WHATSAPP CONFIGURATIONS ---
 WHATSAPP_ENABLED=True
 WHATSAPP_API_URL=http://evolution-api:8080      # Nome interno do container Evolution
-WHATSAPP_API_TOKEN=evoluton_infinity            # MESMA Global API KEY no compose
+WHATSAPP_API_TOKEN=your_strong_api_key            # MESMA Global API KEY no compose
 WHATSAPP_INSTANCE=infinity_bot
 WHATSAPP_OPERATOR_NUMBER=5511999999999          # Número do Atendente Humano (Transbordo)
 ```
@@ -98,7 +98,7 @@ services:
       - "8080:8080"  # Porta do painel evolution
     environment:
       - SERVER_URL=http://localhost:8080
-      - AUTHENTICATION_API_KEY=evoluton_infinity
+      - AUTHENTICATION_API_KEY=${AUTHENTICATION_API_KEY:-change_me_in_env}
     volumes:
       - evolution_instances:/evolution/instances # <- Guarda os QRCodes
     restart: unless-stopped
@@ -164,7 +164,7 @@ Se você for usar na Evolution API de forma "QR Code" padrão. Dispare isso do S
 ```bash
 curl --request POST \
   --url https://seudominio.com/evolution/instance/create \
-  --header 'apikey: evoluton_infinity' \
+  --header 'apikey: your_strong_api_key' \
   --header 'content-type: application/json' \
   --data '{
     "instanceName": "infinity_bot",
@@ -181,7 +181,7 @@ Dispare para conectar o motor de IA que criamos `(router webhook.py)` para ser c
 ```bash
 curl --request POST \
   --url https://seudominio.com/evolution/webhook/set/infinity_bot \
-  --header 'apikey: evoluton_infinity' \
+  --header 'apikey: your_strong_api_key' \
   --header 'content-type: application/json' \
   --data '{
     "webhook": {
@@ -195,3 +195,4 @@ curl --request POST \
 ```
 
 Pronto. Mande um `"Oi"` para o número do QR Code escaneado e admire a "mágica" das Bounding Boxes do LangGraph trabalhando de forma síncrona com SQLite persistance direto no seu bolso.
+
