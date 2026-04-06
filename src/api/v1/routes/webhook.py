@@ -174,6 +174,7 @@ async def evolution_webhook(request: Request, background_tasks: BackgroundTasks)
     # store message for UI polling.
     session = session_store.get_session_by_operator_number(phone)
     if session and session.active:
+        session_store.bind_operator_number(session.session_id, phone)
         if not from_me:
             session_store.add_message(session.session_id, sender="agent", content=text)
             logger.info(
@@ -203,6 +204,7 @@ async def evolution_webhook(request: Request, background_tasks: BackgroundTasks)
             if active_sessions:
                 # Prefer the latest active session to keep handoff continuity.
                 fallback_session = max(active_sessions, key=lambda session: session.created_at)
+                session_store.bind_operator_number(fallback_session.session_id, phone)
                 session_store.add_message(fallback_session.session_id, sender="agent", content=text)
                 logger.info(
                     "[Webhook] fallback stored self-chat reply session=%s phone=%s",

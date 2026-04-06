@@ -29,3 +29,9 @@ def test_get_session_by_operator_number_matches_fuzzy_number_formats() -> None:
     assert by_short is not None and by_short.session_id == session_id
     assert by_jid_like is not None and by_jid_like.session_id == session_id
 
+
+def test_get_session_by_operator_number_matches_incomplete_operator_number() -> None:
+    store = EscalationSessionStore()
+    session_id = store.create_session(user_id="client_3", operator_number="551199979406")
+    by_complete = store.get_session_by_operator_number("5511999794061")
+    assert by_complete is not None and by_complete.session_id == session_id

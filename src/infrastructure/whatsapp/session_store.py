@@ -94,6 +94,13 @@ class EscalationSessionStore:
         """Return all currently active escalation sessions."""
         return [session for session in self._sessions.values() if session.active]
 
+    def bind_operator_number(self, session_id: str, phone: str) -> None:
+        """Bind an observed operator phone to a session mapping."""
+        normalized = _normalize_number(phone)
+        if not normalized:
+            return
+        self._operator_to_session[normalized] = session_id
+
     # ── Messaging ──────────────────────────────────────────────────────────────
 
     def add_message(self, session_id: str, sender: str, content: str) -> bool:
@@ -134,6 +141,11 @@ def _numbers_match(a: str, b: str) -> bool:
     if not a or not b:
         return False
     if a == b:
+        return True
+    # Accept substring relation for incomplete/variant formats.
+    if len(a) >= 10 and a in b:
+        return True
+    if len(b) >= 10 and b in a:
         return True
     # Compare last 8-11 digits to handle DDI/DDD/injected 9th digit variance.
     for size in (11, 10, 9, 8):
