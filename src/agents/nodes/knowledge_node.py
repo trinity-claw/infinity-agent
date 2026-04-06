@@ -12,6 +12,7 @@ import re
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from src.agents.prompts.knowledge_prompt import KNOWLEDGE_SYSTEM_PROMPT
+from src.agents.routing_rules import is_support_overlap_query
 from src.agents.state import AgentState
 from src.agents.tools.knowledge_tools import create_knowledge_tools
 from src.domain.ports.knowledge_store import KnowledgeStore
@@ -20,15 +21,6 @@ from src.infrastructure.llm.model_factory import get_knowledge_llm
 
 logger = logging.getLogger(__name__)
 
-
-_SUPPORT_OVERLAP_PATTERNS = (
-    r"\bstatus\b.{0,25}\bservic",
-    r"\bservice status\b",
-    r"\b(outage|downtime|instab|indispon|fora do ar|is down)\b",
-    r"\b(infinitepay|service|servico|servicos)\b.{0,20}\bdown\b",
-    r"\bnao consigo\b.{0,30}\b(acessar|entrar|transferir|pagar)\b",
-    r"\bi can't\b.{0,30}\b(sign in|login|transfer|pay)\b",
-)
 
 _INFINITEPAY_PATTERNS = (
     r"\binfinitepay\b",
@@ -48,11 +40,8 @@ _INFINITEPAY_PATTERNS = (
 
 
 def _is_support_overlap_query(message: str) -> bool:
-    """Detect support-style operational issues that were misrouted to knowledge."""
-    if not message:
-        return False
-    text = message.lower()
-    return any(re.search(pattern, text) for pattern in _SUPPORT_OVERLAP_PATTERNS)
+    """Backward-compatible local wrapper around shared routing rules."""
+    return is_support_overlap_query(message)
 
 
 def _is_infinitepay_query(message: str) -> bool:
@@ -111,8 +100,9 @@ def _build_web_synthesis_prompt(formatted_results: str) -> str:
         "2) Não repita a pergunta do usuário.\n"
         "3) Traga um resumo direto e, quando fizer sentido, bullets com os destaques.\n"
         "4) Cite 3 a 5 fontes com URL ao final.\n"
-        "5) Se a pergunta for sobre 'hoje', deixe claro que o cenário pode mudar ao longo do dia.\n\n"
-        f"Resultados web:\n{formatted_results}"
+        "5) Se a pergunta for sobre 'hoje', deixe claro que o cenário "
+        "pode mudar ao longo do dia.\n\n"
+        + f"Resultados web:\n{formatted_results}"
     )
 
 
@@ -182,7 +172,8 @@ def create_knowledge_node(
                 synthesized_text = str(synthesized.content or "").strip()
                 if _looks_like_echo_response(user_message, synthesized_text):
                     synthesized_text = (
-                        "Encontrei resultados na web, mas não consegui montar uma resposta confiável. "
+                        "Encontrei resultados na web, mas não consegui "
+                        "montar uma resposta confiável. "
                         "Tente reformular sua pergunta com mais contexto."
                     )
 
@@ -241,11 +232,12 @@ def create_knowledge_node(
         )
         messages = [SystemMessage(content=context_prompt)] + list(state["messages"])
 
-        # First call: LLM decides which tool(s) to use.
-        response = await llm.ainvoke(messages)
+        response = None
+        for _ in range(3):
+            response = await llm.ainvoke(messages)
+            if not response.tool_calls:
+                break
 
-        # If tool calls are present, execute them.
-        if response.tool_calls:
             tool_map = {t.name: t for t in tools}
             tool_results = []
 
@@ -261,20 +253,9 @@ def create_knowledge_node(
                         )
                     )
 
-            # Second call: LLM synthesizes final response using tool results.
-            messages_with_tools = messages + [response] + tool_results
-            final_response = await llm.ainvoke(messages_with_tools)
+            messages = messages + [response] + tool_results
 
-            return {
-                "messages": [
-                    AIMessage(
-                        content=final_response.content,
-                        name="knowledge",
-                    )
-                ],
-            }
-
-        # No tool calls - LLM answered directly.
+        # No (remaining) tool calls - LLM answered directly.
         return {
             "messages": [
                 AIMessage(content=response.content, name="knowledge")

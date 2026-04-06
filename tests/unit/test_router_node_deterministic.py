@@ -50,3 +50,37 @@ async def test_router_uses_deterministic_support_route_without_llm(monkeypatch) 
     assert result["intent"] == "support"
     assert result["agent_route"] == "support"
     assert "deterministic" in result["messages"][0].content.lower()
+
+
+@pytest.mark.asyncio
+async def test_router_maps_general_intent_to_knowledge_route(monkeypatch) -> None:
+    """The optional 'general' intent must resolve to knowledge route."""
+
+    class _FakeResponse:
+        content = (
+            '{"intent":"general","language":"pt-BR","confidence":0.9,'
+            '"reasoning":"General world question."}'
+        )
+
+    class _FakeLLM:
+        async def ainvoke(self, *_args, **_kwargs):
+            return _FakeResponse()
+
+    monkeypatch.setattr(router_module, "get_router_llm", lambda: _FakeLLM())
+
+    state = {
+        "messages": [HumanMessage(content="Quando foi o ultimo jogo do Palmeiras?")],
+        "user_id": "client_test",
+        "intent": "",
+        "language": "pt-BR",
+        "agent_route": "",
+        "sentiment_score": 0.0,
+        "escalated": False,
+        "guardrail_blocked": False,
+        "guardrail_reason": "",
+        "metadata": {},
+    }
+
+    result = await router_module.router_node(state)
+    assert result["intent"] == "general"
+    assert result["agent_route"] == "knowledge"

@@ -116,7 +116,7 @@ async def _resolve_handoff_contact(
 def _handoff_notice_text(session_id: str, reason: str, contact: dict[str, str]) -> str:
     """Build enriched human handoff notice for operator WhatsApp."""
     return (
-        "📌 *DETALHES DO ATENDIMENTO HUMANO*\n\n"
+        "[HUMAN_HANDOFF] *DETALHES DO ATENDIMENTO HUMANO*\n\n"
         f"*Sessão:* {session_id}\n"
         f"*Motivo:* {reason or 'Escalonamento solicitado'}\n"
         f"*Cliente:* {contact.get('name')}\n"
@@ -145,6 +145,72 @@ def _require_valid_handoff_session(session_id: str, session_token: str | None):
     if not session_store.validate_session_token(session_id, session_token):
         raise HTTPException(status_code=403, detail="Invalid escalation session credentials")
     return session
+
+
+def _build_handoff_forward_metadata(
+    session_id: str,
+    session_token: str,
+    authenticated_user: dict[str, str],
+) -> dict[str, Any]:
+    """Build metadata for direct-to-human forwarding responses."""
+    metadata: dict[str, Any] = {
+        "escalated": True,
+        "guardrail_blocked": False,
+        "session_id": session_id,
+        "session_token": session_token,
+    }
+    if authenticated_user:
+        metadata["authenticated_user"] = authenticated_user
+    return metadata
+
+
+def _forward_message_to_active_handoff_session(
+    session_id: str,
+    session_token: str | None,
+    message: str,
+    sender_label: str,
+    authenticated_user: dict[str, str],
+) -> dict[str, Any]:
+    """Forward a user message to an active handoff session and return response metadata."""
+    session = _require_valid_handoff_session(session_id, session_token)
+    session_store.add_message(session_id, sender="user", content=message)
+    if settings.whatsapp_enabled:
+        whatsapp_client.send_message(
+            session.operator_number,
+            f"*{sender_label}:* {message}",
+        )
+    return _build_handoff_forward_metadata(
+        session_id=session_id,
+        session_token=session.session_token,
+        authenticated_user=authenticated_user,
+    )
+
+
+async def _attach_escalation_context(
+    thread_id: str,
+    authenticated_user: dict[str, str],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """Attach escalation session metadata and operator handoff detail notification."""
+    enriched = dict(metadata)
+    active_session = session_store.get_session_by_user(thread_id)
+    if active_session:
+        enriched["session_id"] = active_session.session_id
+        enriched["session_token"] = active_session.session_token
+        if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(
+            active_session.session_id
+        ):
+            contact = await _resolve_handoff_contact(thread_id, authenticated_user)
+            reason = str(enriched.get("escalation_reason", "")).strip()
+            whatsapp_client.send_message(
+                active_session.operator_number,
+                _handoff_notice_text(active_session.session_id, reason, contact),
+            )
+            session_store.mark_detail_notice_sent(active_session.session_id)
+
+    if authenticated_user:
+        enriched["authenticated_user"] = authenticated_user
+    return enriched
 
 
 @router.post(
@@ -177,22 +243,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
     sender_label = authenticated_user.get("name", thread_id)
 
     if request.session_id:
-        session = _require_valid_handoff_session(request.session_id, request.session_token)
-        session_store.add_message(request.session_id, sender="user", content=request.message)
-        if settings.whatsapp_enabled:
-            whatsapp_client.send_message(
-                session.operator_number,
-                f"*{sender_label}:* {request.message}",
-            )
-
-        metadata = {
-            "escalated": True,
-            "guardrail_blocked": False,
-            "session_id": request.session_id,
-            "session_token": session.session_token,
-        }
-        if authenticated_user:
-            metadata["authenticated_user"] = authenticated_user
+        metadata = _forward_message_to_active_handoff_session(
+            session_id=request.session_id,
+            session_token=request.session_token,
+            message=request.message,
+            sender_label=sender_label,
+            authenticated_user=authenticated_user,
+        )
 
         return ChatResponse(
             response="Mensagem enviada ao atendente. Aguarde a resposta.",
@@ -236,35 +293,27 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         response_text, agent_used = _extract_final_agent_response(result)
 
-        extra_metadata: dict = {}
+        metadata = {
+            "escalated": result.get("escalated", False),
+            "guardrail_blocked": result.get("guardrail_blocked", False),
+            **result.get("metadata", {}),
+        }
         if result.get("escalated", False):
-            active_session = session_store.get_session_by_user(thread_id)
-            if active_session:
-                extra_metadata["session_id"] = active_session.session_id
-                extra_metadata["session_token"] = active_session.session_token
-                if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(active_session.session_id):
-                    contact = await _resolve_handoff_contact(thread_id, authenticated_user)
-                    reason = str(result.get("metadata", {}).get("escalation_reason", "")).strip()
-                    whatsapp_client.send_message(
-                        active_session.operator_number,
-                        _handoff_notice_text(active_session.session_id, reason, contact),
-                    )
-                    session_store.mark_detail_notice_sent(active_session.session_id)
+            metadata = await _attach_escalation_context(
+                thread_id=thread_id,
+                authenticated_user=authenticated_user,
+                metadata=metadata,
+            )
             response_text = _append_async_handoff_note(response_text)
-        if authenticated_user:
-            extra_metadata["authenticated_user"] = authenticated_user
+        elif authenticated_user:
+            metadata["authenticated_user"] = authenticated_user
 
         return ChatResponse(
             response=response_text,
             agent_used=agent_used,
             intent=result.get("intent", ""),
             language=result.get("language", "pt-BR"),
-            metadata={
-                "escalated": result.get("escalated", False),
-                "guardrail_blocked": result.get("guardrail_blocked", False),
-                **result.get("metadata", {}),
-                **extra_metadata,
-            },
+            metadata=metadata,
         )
     except Exception as exc:
         logger.error(
@@ -299,30 +348,20 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
     yield _sse_event("status", {"message": "Recebido. Iniciando fluxo do agente..."})
 
     if request.session_id:
-        session = _require_valid_handoff_session(request.session_id, request.session_token)
-        session_store.add_message(request.session_id, sender="user", content=request.message)
-        if settings.whatsapp_enabled:
-            whatsapp_client.send_message(
-                session.operator_number,
-                f"*{sender_label}:* {request.message}",
-            )
+        metadata = _forward_message_to_active_handoff_session(
+            session_id=request.session_id,
+            session_token=request.session_token,
+            message=request.message,
+            sender_label=sender_label,
+            authenticated_user=authenticated_user,
+        )
 
         final_payload = {
             "response": "Mensagem enviada ao atendente. Aguarde a resposta.",
             "agent_used": "human",
             "intent": "escalation",
             "language": "pt-BR",
-            "metadata": {
-                "escalated": True,
-                "guardrail_blocked": False,
-                "session_id": request.session_id,
-                "session_token": session.session_token,
-                **(
-                    {"authenticated_user": authenticated_user}
-                    if authenticated_user
-                    else {}
-                ),
-            },
+            "metadata": metadata,
         }
         for chunk in _chunk_text(final_payload["response"]):
             yield _sse_event("token", {"delta": chunk})
@@ -416,33 +455,27 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
         if not final_text:
             final_text = "Desculpe, não consegui processar sua mensagem. Tente novamente."
 
+        metadata = {
+            "escalated": escalated,
+            "guardrail_blocked": guardrail_blocked,
+            **merged_metadata,
+        }
         if escalated:
-            active_session = session_store.get_session_by_user(thread_id)
-            if active_session:
-                merged_metadata["session_id"] = active_session.session_id
-                merged_metadata["session_token"] = active_session.session_token
-                if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(active_session.session_id):
-                    contact = await _resolve_handoff_contact(thread_id, authenticated_user)
-                    reason = str(merged_metadata.get("escalation_reason", "")).strip()
-                    whatsapp_client.send_message(
-                        active_session.operator_number,
-                        _handoff_notice_text(active_session.session_id, reason, contact),
-                    )
-                    session_store.mark_detail_notice_sent(active_session.session_id)
+            metadata = await _attach_escalation_context(
+                thread_id=thread_id,
+                authenticated_user=authenticated_user,
+                metadata=metadata,
+            )
             final_text = _append_async_handoff_note(final_text)
-        if authenticated_user:
-            merged_metadata["authenticated_user"] = authenticated_user
+        elif authenticated_user:
+            metadata["authenticated_user"] = authenticated_user
 
         final_payload = {
             "response": final_text,
             "agent_used": agent_used,
             "intent": intent,
             "language": language,
-            "metadata": {
-                "escalated": escalated,
-                "guardrail_blocked": guardrail_blocked,
-                **merged_metadata,
-            },
+            "metadata": metadata,
         }
 
         for chunk in _chunk_text(final_text):

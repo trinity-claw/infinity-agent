@@ -8,34 +8,20 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 
 from langchain_core.messages import AIMessage, SystemMessage
 
 from src.agents.prompts.router_prompt import ROUTER_SYSTEM_PROMPT
+from src.agents.routing_rules import is_operational_support_query
 from src.agents.state import AgentState
 from src.infrastructure.llm.model_factory import get_router_llm
 
 logger = logging.getLogger(__name__)
 
 
-_SUPPORT_OPERATIONAL_PATTERNS = (
-    r"\bstatus\b.{0,25}\bservic",
-    r"\bservice status\b",
-    r"\b(outage|downtime|instab|indispon|fora do ar|is down)\b",
-    r"\b(infinitepay|service|servico|servicos)\b.{0,20}\bdown\b",
-    r"\binstabilidade\b",
-    r"\bservic[oos].{0,25}\b(indisponivel|instavel|fora do ar)\b",
-    r"\bpix\b.{0,20}\b(instabilidade|fora do ar|indisponivel)\b",
-)
-
-
 def _is_operational_support_query(message: str) -> bool:
-    """Detect service-status and outage questions that must route to support."""
-    if not message:
-        return False
-    text = message.lower()
-    return any(re.search(pattern, text) for pattern in _SUPPORT_OPERATIONAL_PATTERNS)
+    """Backward-compatible local wrapper around shared routing rules."""
+    return is_operational_support_query(message)
 
 
 async def router_node(state: AgentState) -> dict:
@@ -113,7 +99,13 @@ async def router_node(state: AgentState) -> dict:
         reasoning = "Classification parse failed, defaulting to knowledge"
 
     # Map intent to agent route
-    agent_route = intent if intent in ("knowledge", "support", "escalation") else "knowledge"
+    route_map = {
+        "knowledge": "knowledge",
+        "general": "knowledge",
+        "support": "support",
+        "escalation": "escalation",
+    }
+    agent_route = route_map.get(intent, "knowledge")
 
     return {
         "intent": intent,

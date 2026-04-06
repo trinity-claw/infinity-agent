@@ -29,7 +29,7 @@ It serves web chat and WhatsApp handoff use cases with:
 Message flow:
 1. `POST /v1/chat` receives message and user context.
 2. Input guard blocks prompt injection / unsafe content.
-3. Router classifies intent: `knowledge`, `support`, `escalation`.
+3. Router classifies intent: `knowledge`, `general`, `support`, `escalation`.
 4. Specialized agent handles request.
 5. Personality/finalization layer (implemented by agent prompt style + output guard) normalizes and sanitizes final text.
 6. Response is returned to UI.
@@ -89,7 +89,7 @@ Response:
 ```
 
 ### Other routes
-- `POST /v1/chat/stream` (SSE status + chunked response streaming)
+- `POST /v1/chat/stream` (SSE status + chunked response streaming from the final generated text)
 - `GET /v1/health`
 - `POST /v1/escalation/session/start`
 - `GET /v1/escalation/session/{session_id}`
@@ -253,6 +253,10 @@ docs/POST_DEPLOY_CHECKLIST.md
 - Chunking strategy in `src/rag/chunker.py`
 - Embedding + persistence in `src/rag/ingest_pipeline.py`
 - Retrieval path used by knowledge tools in `src/agents/tools/knowledge_tools.py`
+
+Embedding details:
+- Current implementation uses ChromaDB's default local embedding function (`all-MiniLM-L6-v2`) with cosine similarity.
+- The `EMBEDDING_MODEL` environment variable is reserved for future external-embedding adapters and is not used in the current runtime path.
 
 Runtime behavior:
 - Product/service questions -> vector retrieval

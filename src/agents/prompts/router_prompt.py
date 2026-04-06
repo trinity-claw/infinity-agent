@@ -59,7 +59,7 @@ When in doubt:
 
 ## Output Format (JSON only)
 {
-  "intent": "knowledge" | "support" | "escalation",
+  "intent": "knowledge" | "general" | "support" | "escalation",
   "language": "pt-BR" | "en" | "es" | "...",
   "confidence": 0.0 to 1.0,
   "reasoning": "brief justification"

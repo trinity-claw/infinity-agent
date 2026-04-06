@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -15,7 +17,12 @@ def test_detect_infinitepay_domain_query() -> None:
 
 
 def test_detect_non_infinitepay_query() -> None:
-    assert knowledge_module._is_infinitepay_query("Quais as principais noticias de Sao Paulo hoje?") is False
+    assert (
+        knowledge_module._is_infinitepay_query(
+            "Quais as principais noticias de Sao Paulo hoje?"
+        )
+        is False
+    )
 
 
 def test_detect_echo_response() -> None:
@@ -74,3 +81,75 @@ async def test_general_query_uses_deterministic_web_search(monkeypatch) -> None:
     assert result["metadata"]["knowledge_deterministic_web_search"] is True
     assert result["metadata"]["knowledge_web_results_count"] == 2
     assert "Resumo das notícias" in result["messages"][0].content
+
+
+@pytest.mark.asyncio
+async def test_knowledge_tool_calling_supports_multiple_rounds(monkeypatch) -> None:
+    class _FakeTool:
+        name = "search_knowledge_base"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def ainvoke(self, _args):
+            self.calls += 1
+            return f"tool-result-{self.calls}"
+
+    class _FakeLLM:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def bind_tools(self, _tools):
+            return self
+
+        async def ainvoke(self, _messages):
+            self.calls += 1
+            if self.calls == 1:
+                return SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        {"name": "search_knowledge_base", "id": "1", "args": {"query": "taxas"}}
+                    ],
+                )
+            if self.calls == 2:
+                return SimpleNamespace(
+                    content="",
+                    tool_calls=[
+                        {"name": "search_knowledge_base", "id": "2", "args": {"query": "pix"}}
+                    ],
+                )
+            return SimpleNamespace(content="Resposta final consolidada.", tool_calls=[])
+
+    fake_tool = _FakeTool()
+    fake_llm = _FakeLLM()
+
+    monkeypatch.setattr(
+        knowledge_module,
+        "create_knowledge_tools",
+        lambda *_args, **_kwargs: [fake_tool],
+    )
+    monkeypatch.setattr(knowledge_module, "get_knowledge_llm", lambda: fake_llm)
+
+    node = knowledge_module.create_knowledge_node(
+        knowledge_store=object(),
+        web_searcher=object(),
+    )
+
+    state = {
+        "messages": [HumanMessage(content="Quais sao as taxas da maquininha smart e do pix?")],
+        "user_id": "client_web",
+        "intent": "knowledge",
+        "language": "pt-BR",
+        "agent_route": "knowledge",
+        "sentiment_score": 0.0,
+        "escalated": False,
+        "guardrail_blocked": False,
+        "guardrail_reason": "",
+        "metadata": {},
+    }
+
+    result = await node(state)
+
+    assert fake_llm.calls == 3
+    assert fake_tool.calls == 2
+    assert result["messages"][0].content == "Resposta final consolidada."
