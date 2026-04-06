@@ -119,8 +119,10 @@ async def evolution_webhook(request: Request, background_tasks: BackgroundTasks)
     payload = await request.json()
     
     # We only care about MESSAGES_UPSERT events
-    event = payload.get("event")
-    if event != "messages.upsert":
+    # Evolution may send "messages.upsert" or "MESSAGES_UPSERT" depending on config/version.
+    event = str(payload.get("event") or "")
+    normalized_event = event.lower().replace("_", ".")
+    if normalized_event != "messages.upsert":
         # Evolution API sends connection updates too
         return {"status": "ignored", "reason": f"event {event}"}
 
