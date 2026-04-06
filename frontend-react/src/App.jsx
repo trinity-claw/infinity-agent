@@ -56,7 +56,7 @@ function App() {
   const [userProfile, setUserProfile] = useState(() => getStoredProfile());
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('infinity_active_session_id'));
   const pollCursorRef = useRef(0);
 
   useEffect(() => {
@@ -95,6 +95,14 @@ function App() {
   }, [activeSessionId]);
 
   useEffect(() => {
+    if (activeSessionId) {
+      localStorage.setItem('infinity_active_session_id', activeSessionId);
+    } else {
+      localStorage.removeItem('infinity_active_session_id');
+    }
+  }, [activeSessionId]);
+
+  useEffect(() => {
     let pollingInterval;
     if (activeSessionId) {
       pollingInterval = setInterval(async () => {
@@ -107,7 +115,7 @@ function App() {
               const maxIndex = Math.max(...data.messages.map((message) => message.index ?? since));
               pollCursorRef.current = Math.max(pollCursorRef.current, maxIndex + 1);
 
-              const operatorMessages = data.messages.filter((message) => message.sender === 'agent');
+              const operatorMessages = data.messages.filter((message) => message.sender !== 'user');
               if (operatorMessages.length > 0) {
                 setMessages((prev) => [
                   ...prev,
@@ -217,6 +225,7 @@ function App() {
     if (confirm('Tem certeza que deseja apagar todo o historico?')) {
       setMessages([]);
       setActiveSessionId(null);
+      localStorage.removeItem('infinity_active_session_id');
     }
   };
 
@@ -227,6 +236,7 @@ function App() {
     setActiveSessionId(null);
     setIsSidebarOpenMobile(false);
     localStorage.removeItem('infinity_chat_history');
+    localStorage.removeItem('infinity_active_session_id');
     ensureUserId(profile);
   };
 
@@ -236,6 +246,7 @@ function App() {
     localStorage.removeItem('infinity_auth_name');
     localStorage.removeItem('infinity_auth_picture');
     localStorage.removeItem('infinity_chat_history');
+    localStorage.removeItem('infinity_active_session_id');
 
     setIsAuthenticated(false);
     setUserProfile(null);

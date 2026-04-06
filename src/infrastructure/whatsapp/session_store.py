@@ -78,6 +78,10 @@ class EscalationSessionStore:
                 return session
         return None
 
+    def get_active_sessions(self) -> list[EscalationSession]:
+        """Return all currently active escalation sessions."""
+        return [session for session in self._sessions.values() if session.active]
+
     # ── Messaging ──────────────────────────────────────────────────────────────
 
     def add_message(self, session_id: str, sender: str, content: str) -> bool:

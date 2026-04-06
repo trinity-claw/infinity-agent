@@ -152,6 +152,13 @@ async def evolution_webhook(request: Request, background_tasks: BackgroundTasks)
 
     from_me = bool(key.get("fromMe"))
     message_id = key.get("id", "")
+    logger.info(
+        "[Webhook] event=messages.upsert from_me=%s phone=%s message_id=%s text=%s",
+        from_me,
+        phone,
+        message_id,
+        text[:120],
+    )
 
     # Operator reply path: when a human handoff session exists for this number,
     # store message for UI polling.
@@ -159,18 +166,45 @@ async def evolution_webhook(request: Request, background_tasks: BackgroundTasks)
     if session and session.active:
         if not from_me:
             session_store.add_message(session.session_id, sender="agent", content=text)
+            logger.info(
+                "[Webhook] stored operator reply session=%s phone=%s",
+                session.session_id,
+                phone,
+            )
             return {"status": "ok", "role": "operator", "session_id": session.session_id}
 
         # Compatibility for self-chat operation (operator == bot account).
         if not _is_operator_system_message(text):
             session_store.add_message(session.session_id, sender="agent", content=text)
+            logger.info(
+                "[Webhook] stored self-chat operator reply session=%s phone=%s",
+                session.session_id,
+                phone,
+            )
             return {"status": "ok", "role": "operator_self", "session_id": session.session_id}
 
         return {"status": "ignored", "reason": "operator_system_forward"}
 
     if from_me:
+        # Last-resort fallback for self-chat when configured operator number
+        # does not exactly match remoteJid. Only safe when there is a single
+        # active escalation session.
+        if not _is_operator_system_message(text):
+            active_sessions = session_store.get_active_sessions()
+            if len(active_sessions) == 1:
+                fallback_session = active_sessions[0]
+                session_store.add_message(fallback_session.session_id, sender="agent", content=text)
+                logger.info(
+                    "[Webhook] fallback stored self-chat reply session=%s phone=%s",
+                    fallback_session.session_id,
+                    phone,
+                )
+                return {
+                    "status": "ok",
+                    "role": "operator_self_fallback",
+                    "session_id": fallback_session.session_id,
+                }
         return {"status": "ignored", "reason": "from_me"}
 
     background_tasks.add_task(process_whatsapp_message, phone, text, message_id)
     return {"status": "ok", "task": "queued"}
-
