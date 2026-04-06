@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 CPF_PATTERN = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
 CNPJ_PATTERN = re.compile(r"\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}")
 EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
-PHONE_PATTERN = re.compile(r"\(\d{2}\)\s?\d{4,5}-\d{4}")
+PHONE_PATTERN = re.compile(
+    r"(?:(?:\+?55)\s*)?(?:\(?\d{2}\)?\s*)?\d{4,5}[-\s]?\d{4}"
+)
 
 
 def _mask_pii(text: str) -> str:
@@ -40,6 +42,15 @@ def _mask_pii(text: str) -> str:
         return f"{local[0]}***@{domain}"
 
     text = EMAIL_PATTERN.sub(mask_email, text)
+
+    # Mask phones: +55 (11) 99999-1234 -> ***-***-1234
+    def mask_phone(m: re.Match) -> str:
+        digits = re.sub(r"\D", "", m.group())
+        if len(digits) < 8:
+            return m.group()
+        return f"***-***-{digits[-4:]}"
+
+    text = PHONE_PATTERN.sub(mask_phone, text)
 
     return text
 

@@ -20,20 +20,27 @@ if TYPE_CHECKING:
 def create_support_tools(
     user_repo: UserRepository,
     ticket_repo: TicketRepository,
+    *,
+    bound_user_id: str,
 ) -> list:
     """Factory that creates support tools with injected repositories."""
 
+    def _current_user_id() -> str:
+        return bound_user_id
+
     @tool
-    async def lookup_user(user_id: str) -> str:
+    async def lookup_user() -> str:
         """Look up a customer's account information."""
+        user_id = _current_user_id()
         user = await user_repo.find_by_id(user_id)
         if not user:
             return f"No customer found with ID: {user_id}. This user may not have an account."
         return user.to_summary()
 
     @tool
-    async def get_transaction_history(user_id: str) -> str:
+    async def get_transaction_history() -> str:
         """Get the customer's recent transaction history."""
+        user_id = _current_user_id()
         transactions = await user_repo.get_transaction_history(user_id, limit=10)
         if not transactions:
             return f"No transactions found for user {user_id}."
@@ -44,10 +51,9 @@ def create_support_tools(
         return "\n".join(lines)
 
     @tool
-    async def create_support_ticket(
-        user_id: str, issue: str, priority: str = "medium"
-    ) -> str:
+    async def create_support_ticket(issue: str, priority: str = "medium") -> str:
         """Create a support ticket for issues requiring follow-up."""
+        user_id = _current_user_id()
         try:
             ticket_priority = TicketPriority(priority.lower())
         except ValueError:
@@ -83,8 +89,9 @@ def create_support_tools(
         return "\n".join(lines)
 
     @tool
-    async def reset_password_request(user_id: str) -> str:
+    async def reset_password_request() -> str:
         """Initiate a password reset for the customer account."""
+        user_id = _current_user_id()
         user = await user_repo.find_by_id(user_id)
         if not user:
             return f"Cannot initiate password reset: user {user_id} not found."
@@ -96,8 +103,9 @@ def create_support_tools(
         )
 
     @tool
-    async def get_account_balance(user_id: str) -> str:
+    async def get_account_balance() -> str:
         """Check the customer's account balance."""
+        user_id = _current_user_id()
         balance = await user_repo.get_account_balance(user_id)
         if balance is None:
             return f"Could not retrieve balance for user {user_id}."

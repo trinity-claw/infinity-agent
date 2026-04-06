@@ -33,7 +33,21 @@ def create_support_node(
     Returns:
         An async function that serves as the LangGraph node.
     """
-    tools = create_support_tools(user_repo, ticket_repo)
+    def _filter_tool_args(tool_fn, raw_args: dict | None) -> dict:
+        if not isinstance(raw_args, dict):
+            return {}
+        allowed_keys = set(getattr(tool_fn, "args", {}).keys())
+        if not allowed_keys:
+            return {}
+        filtered = {key: value for key, value in raw_args.items() if key in allowed_keys}
+        dropped = set(raw_args.keys()) - set(filtered.keys())
+        if dropped:
+            logger.warning(
+                "Support tool '%s' received unexpected args and ignored them: %s",
+                getattr(tool_fn, "name", "unknown"),
+                sorted(dropped),
+            )
+        return filtered
 
     async def support_node(state: AgentState) -> dict:
         """Handle customer support requests with tool-calling.
@@ -44,8 +58,13 @@ def create_support_node(
         3. Executes tools and feeds results back to LLM
         4. LLM generates a personalized, empathetic response
         """
-        llm = get_support_llm().bind_tools(tools)
         user_id = state.get("user_id", "unknown")
+        tools = create_support_tools(
+            user_repo,
+            ticket_repo,
+            bound_user_id=user_id,
+        )
+        llm = get_support_llm().bind_tools(tools)
         authenticated_user = state.get("metadata", {}).get("authenticated_user", {})
         auth_name = authenticated_user.get("name", "")
         auth_email = authenticated_user.get("email", "")
@@ -65,7 +84,8 @@ def create_support_node(
             f"Current customer user_id: {user_id}\n"
             f"{profile_block}\n"
             f"If authenticated name is present, use it for personalization when appropriate.\n"
-            f"Always use this user_id when calling tools."
+            "Account-related tools are already scoped to this current customer.\n"
+            "Never ask for or operate on a different user_id."
         )
 
         messages = [SystemMessage(content=context_prompt)] + list(
@@ -87,7 +107,8 @@ def create_support_node(
                 tool_fn = tool_map.get(tool_call["name"])
                 if tool_fn:
                     logger.info("Support agent calling tool: %s", tool_call["name"])
-                    result = await tool_fn.ainvoke(tool_call["args"])
+                    safe_args = _filter_tool_args(tool_fn, tool_call.get("args"))
+                    result = await tool_fn.ainvoke(safe_args)
                     tool_messages.append(
                         ToolMessage(
                             content=str(result),

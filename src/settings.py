@@ -45,9 +45,12 @@ class Settings(BaseSettings):
     whatsapp_instance: str = "main"
     whatsapp_operator_number: str = ""
 
+    # Sensitive endpoint authentication (enforced only in production)
+    sensitive_api_key: str = ""
+
     @property
     def is_production(self) -> bool:
-        return self.app_env == "production"
+        return self.app_env.strip().lower() == "production"
 
 
 settings = Settings()
