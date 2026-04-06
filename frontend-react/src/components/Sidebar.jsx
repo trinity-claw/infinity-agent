@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import agentLogo from '../../infinity-agent-logo.png';
 
 const getFallbackUserId = () => 'client789';
@@ -97,6 +97,8 @@ const SUGGESTION_GROUPS = [
 const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
   const [userId, setUserId] = useState(localStorage.getItem('infinity_user_id') || getFallbackUserId());
   const [selectedSuggestionGroup, setSelectedSuggestionGroup] = useState(SUGGESTION_GROUPS[0].id);
+  const [suggestionMenuOpen, setSuggestionMenuOpen] = useState(false);
+  const suggestionDropdownRef = useRef(null);
 
   const handleUserIdChange = (event) => {
     const newId = event.target.value;
@@ -115,6 +117,27 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
 
   const activeSuggestionGroup =
     SUGGESTION_GROUPS.find((group) => group.id === selectedSuggestionGroup) || SUGGESTION_GROUPS[0];
+
+  const handleSuggestionGroupSelect = (groupId) => {
+    setSelectedSuggestionGroup(groupId);
+    setSuggestionMenuOpen(false);
+  };
+
+  useEffect(() => {
+    if (!suggestionMenuOpen) return undefined;
+
+    const handleDocumentClick = (event) => {
+      if (
+        suggestionDropdownRef.current
+        && !suggestionDropdownRef.current.contains(event.target)
+      ) {
+        setSuggestionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, [suggestionMenuOpen]);
 
   return (
     <aside className="sidebar">
@@ -167,21 +190,45 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
       <div className="sidebar-section">
         <div className="sidebar-label">Sugestoes guiadas</div>
         <div className="suggestions-toolbar">
-          <label htmlFor="suggestionGroupSelect" className="suggestions-label">
-            Categoria
-          </label>
-          <select
-            id="suggestionGroupSelect"
-            className="suggestions-select"
-            value={selectedSuggestionGroup}
-            onChange={(event) => setSelectedSuggestionGroup(event.target.value)}
-          >
-            {SUGGESTION_GROUPS.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.label}
-              </option>
-            ))}
-          </select>
+          <span className="suggestions-label">Categoria</span>
+          <div className="suggestions-dropdown" ref={suggestionDropdownRef}>
+            <button
+              id="suggestionGroupSelect"
+              type="button"
+              className="suggestions-dropdown-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={suggestionMenuOpen}
+              onClick={() => setSuggestionMenuOpen((open) => !open)}
+            >
+              <span>{activeSuggestionGroup.label}</span>
+              <span
+                className={`suggestions-dropdown-icon ${suggestionMenuOpen ? 'open' : ''}`}
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </button>
+
+            {suggestionMenuOpen && (
+              <div className="suggestions-dropdown-menu" role="listbox" aria-label="Categorias de sugestoes">
+                {SUGGESTION_GROUPS.map((group) => {
+                  const isActive = group.id === selectedSuggestionGroup;
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      className={`suggestions-dropdown-item ${isActive ? 'active' : ''}`}
+                      onClick={() => handleSuggestionGroupSelect(group.id)}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <p className="suggestions-group-hint">{activeSuggestionGroup.description}</p>
         </div>
         <div className="quick-actions suggestion-cards">

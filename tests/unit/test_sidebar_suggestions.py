@@ -40,3 +40,4 @@ def test_sidebar_uses_dropdown_suggestion_groups() -> None:
     assert "suggestionGroupSelect" in content
     assert "Sugestoes guiadas" in content
     assert "setSelectedSuggestionGroup" in content
+    assert "suggestions-dropdown-trigger" in content
