@@ -3,17 +3,100 @@ import agentLogo from '../../infinity-agent-logo.png';
 
 const getFallbackUserId = () => 'client789';
 
-const QUICK_SUGGESTIONS = [
-  { label: 'Taxas da maquininha', message: 'Quais sao as taxas da Maquininha Smart?' },
-  { label: 'Problema de acesso', message: 'Nao consigo acessar minha conta' },
-  { label: 'Como usar InfiniteTap', message: 'Como usar o InfiniteTap?' },
-  { label: 'Emprestimo empresarial', message: 'Quero fazer um emprestimo' },
-  { label: 'Pix gratuito?', message: 'O Pix e gratuito na InfinitePay?' },
-  { label: 'Falar com atendente', message: 'Quero falar com um atendente humano' },
+const SUGGESTION_GROUPS = [
+  {
+    id: 'products',
+    label: 'Produtos e taxas',
+    description: 'Perguntas sobre solucoes, taxas e funcionalidades da InfinitePay.',
+    items: [
+      {
+        title: 'Taxas da Maquininha Smart',
+        description: 'Entenda as taxas de debito e credito para vendas presenciais.',
+        message: 'Quais sao as taxas da Maquininha Smart para debito e credito?',
+      },
+      {
+        title: 'Como funciona o InfiniteTap',
+        description: 'Saiba como transformar seu celular em maquininha.',
+        message: 'Como usar o InfiniteTap para receber pagamentos no celular?',
+      },
+      {
+        title: 'Pix Parcelado',
+        description: 'Tire duvidas sobre parcelamento via Pix.',
+        message: 'Como funciona o Pix Parcelado da InfinitePay?',
+      },
+      {
+        title: 'Link de Pagamento',
+        description: 'Veja como cobrar clientes com link online.',
+        message: 'Como funciona o Link de Pagamento da InfinitePay para vendas online?',
+      },
+    ],
+  },
+  {
+    id: 'support',
+    label: 'Suporte de conta',
+    description: 'Diagnosticos de acesso, transferencias, saldo e historico.',
+    items: [
+      {
+        title: 'Nao consigo acessar minha conta',
+        description: 'Fluxo de suporte para login e recuperacao de acesso.',
+        message: 'Nao consigo acessar minha conta. Pode me ajudar com os proximos passos?',
+      },
+      {
+        title: 'Transferencia falhando',
+        description: 'Investigacao para problemas em transferencias.',
+        message: 'Por que nao estou conseguindo fazer transferencias agora?',
+      },
+      {
+        title: 'Consultar saldo disponivel',
+        description: 'Checagem rapida do saldo da conta.',
+        message: 'Quero consultar meu saldo disponivel agora.',
+      },
+      {
+        title: 'Historico de transacoes',
+        description: 'Ultimas movimentacoes para conferencia.',
+        message: 'Mostre meu historico recente de transacoes, por favor.',
+      },
+    ],
+  },
+  {
+    id: 'escalation',
+    label: 'Escalacao humana',
+    description: 'Atalhos para transferir o atendimento para um humano.',
+    items: [
+      {
+        title: 'Falar com atendente humano',
+        description: 'Solicita atendimento humano imediato.',
+        message: 'Quero falar com um atendente humano agora.',
+      },
+      {
+        title: 'Problema urgente',
+        description: 'Sinaliza urgencia para priorizacao do atendimento.',
+        message: 'Estou com um problema urgente e preciso de suporte humano agora.',
+      },
+    ],
+  },
+  {
+    id: 'general',
+    label: 'Perguntas gerais',
+    description: 'Exemplos de perguntas fora do escopo de produtos.',
+    items: [
+      {
+        title: 'Ultimo jogo do Palmeiras',
+        description: 'Exemplo de busca web para pergunta geral.',
+        message: 'Quando foi o ultimo jogo do Palmeiras?',
+      },
+      {
+        title: 'Noticias de Sao Paulo hoje',
+        description: 'Exemplo de pergunta de atualidades.',
+        message: 'Quais as principais noticias de Sao Paulo hoje?',
+      },
+    ],
+  },
 ];
 
 const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
   const [userId, setUserId] = useState(localStorage.getItem('infinity_user_id') || getFallbackUserId());
+  const [selectedSuggestionGroup, setSelectedSuggestionGroup] = useState(SUGGESTION_GROUPS[0].id);
 
   const handleUserIdChange = (event) => {
     const newId = event.target.value;
@@ -29,6 +112,9 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
         .map((part) => part[0].toUpperCase())
         .join('')
     : 'IA';
+
+  const activeSuggestionGroup =
+    SUGGESTION_GROUPS.find((group) => group.id === selectedSuggestionGroup) || SUGGESTION_GROUPS[0];
 
   return (
     <aside className="sidebar">
@@ -79,16 +165,35 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-label">Sugestoes rapidas</div>
-        <div className="quick-actions">
-          {QUICK_SUGGESTIONS.map((item) => (
+        <div className="sidebar-label">Sugestoes guiadas</div>
+        <div className="suggestions-toolbar">
+          <label htmlFor="suggestionGroupSelect" className="suggestions-label">
+            Categoria
+          </label>
+          <select
+            id="suggestionGroupSelect"
+            className="suggestions-select"
+            value={selectedSuggestionGroup}
+            onChange={(event) => setSelectedSuggestionGroup(event.target.value)}
+          >
+            {SUGGESTION_GROUPS.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.label}
+              </option>
+            ))}
+          </select>
+          <p className="suggestions-group-hint">{activeSuggestionGroup.description}</p>
+        </div>
+        <div className="quick-actions suggestion-cards">
+          {activeSuggestionGroup.items.map((item) => (
             <button
-              key={item.label}
+              key={item.title}
               type="button"
-              className="quick-btn"
+              className="quick-btn suggestion-btn"
               onClick={() => onQuickSuggestion?.(item.message)}
             >
-              {item.label}
+              <span className="suggestion-title">{item.title}</span>
+              <span className="suggestion-desc">{item.description}</span>
             </button>
           ))}
         </div>
