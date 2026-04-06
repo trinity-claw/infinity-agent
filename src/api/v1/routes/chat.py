@@ -79,6 +79,64 @@ def _chunk_text(text: str, chunk_size: int = 22) -> list[str]:
     return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
+async def _resolve_handoff_contact(
+    thread_id: str,
+    authenticated_user: dict[str, str],
+) -> dict[str, str]:
+    """Resolve best-effort contact data for human handoff notice."""
+    contact = {
+        "name": authenticated_user.get("name", "") if authenticated_user else "",
+        "email": authenticated_user.get("email", "") if authenticated_user else "",
+        "phone": "",
+    }
+
+    try:
+        user_repo = container.get_user_repository()
+        user = await user_repo.find_by_id(thread_id)
+        if user is None and contact["email"]:
+            user = await user_repo.find_by_email(contact["email"])
+        if user:
+            if not contact["name"]:
+                contact["name"] = user.name
+            if not contact["email"]:
+                contact["email"] = user.email
+            contact["phone"] = user.phone
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        logger.warning("Unable to resolve handoff contact details: %s", exc)
+
+    if not contact["name"]:
+        contact["name"] = thread_id
+    if not contact["email"]:
+        contact["email"] = "nao_informado"
+    if not contact["phone"]:
+        contact["phone"] = "nao_informado"
+    return contact
+
+
+def _handoff_notice_text(session_id: str, reason: str, contact: dict[str, str]) -> str:
+    """Build enriched human handoff notice for operator WhatsApp."""
+    return (
+        "📌 *DETALHES DO ATENDIMENTO HUMANO*\n\n"
+        f"*Sessão:* {session_id}\n"
+        f"*Motivo:* {reason or 'Escalonamento solicitado'}\n"
+        f"*Cliente:* {contact.get('name')}\n"
+        f"*Email do cliente:* {contact.get('email')}\n"
+        f"*Telefone do cliente:* {contact.get('phone')}\n\n"
+        "Canal de continuidade: atendimento assíncrono por WhatsApp e/ou e-mail."
+    )
+
+
+def _append_async_handoff_note(text: str) -> str:
+    """Append explicit asynchronous handoff channel note."""
+    note = (
+        "\n\nA continuidade do atendimento humano ocorrerá por WhatsApp e/ou e-mail "
+        "cadastrado (fluxo assíncrono)."
+    )
+    if note.strip() in (text or ""):
+        return text
+    return f"{text}{note}"
+
+
 @router.post(
     "/chat",
     response_model=ChatResponse,
@@ -173,6 +231,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
             active_session = session_store.get_session_by_user(thread_id)
             if active_session:
                 extra_metadata["session_id"] = active_session.session_id
+                if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(active_session.session_id):
+                    contact = await _resolve_handoff_contact(thread_id, authenticated_user)
+                    reason = str(result.get("metadata", {}).get("escalation_reason", "")).strip()
+                    whatsapp_client.send_message(
+                        active_session.operator_number,
+                        _handoff_notice_text(active_session.session_id, reason, contact),
+                    )
+                    session_store.mark_detail_notice_sent(active_session.session_id)
+            response_text = _append_async_handoff_note(response_text)
         if authenticated_user:
             extra_metadata["authenticated_user"] = authenticated_user
 
@@ -342,6 +409,15 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
             active_session = session_store.get_session_by_user(thread_id)
             if active_session:
                 merged_metadata["session_id"] = active_session.session_id
+                if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(active_session.session_id):
+                    contact = await _resolve_handoff_contact(thread_id, authenticated_user)
+                    reason = str(merged_metadata.get("escalation_reason", "")).strip()
+                    whatsapp_client.send_message(
+                        active_session.operator_number,
+                        _handoff_notice_text(active_session.session_id, reason, contact),
+                    )
+                    session_store.mark_detail_notice_sent(active_session.session_id)
+            final_text = _append_async_handoff_note(final_text)
         if authenticated_user:
             merged_metadata["authenticated_user"] = authenticated_user
 

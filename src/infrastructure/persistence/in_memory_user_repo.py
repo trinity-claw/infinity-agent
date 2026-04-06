@@ -77,6 +77,42 @@ def _seed_users() -> dict[str, User]:
             is_active=True,
             created_at=now - timedelta(days=270),
         ),
+        "client_pelissarog_gmail_com": User(
+            user_id="client_pelissarog_gmail_com",
+            name="Gustavo Pelissaro",
+            email="pelissarog@gmail.com",
+            phone="(11) 99794-0610",
+            document="111.222.333-44",
+            account_type="PF",
+            plan="InfiniteTap",
+            balance=1_240.35,
+            is_active=True,
+            created_at=now - timedelta(days=120),
+        ),
+        "client_pelissarog_gmail.com": User(
+            user_id="client_pelissarog_gmail.com",
+            name="Gustavo Pelissaro",
+            email="pelissarog@gmail.com",
+            phone="(11) 99794-0610",
+            document="111.222.333-44",
+            account_type="PF",
+            plan="InfiniteTap",
+            balance=1_240.35,
+            is_active=True,
+            created_at=now - timedelta(days=120),
+        ),
+        "client_peli": User(
+            user_id="client_peli",
+            name="Gustavo Pelissaro",
+            email="pelissarog@gmail.com",
+            phone="(11) 99794-0610",
+            document="111.222.333-44",
+            account_type="PF",
+            plan="InfiniteTap",
+            balance=1_240.35,
+            is_active=True,
+            created_at=now - timedelta(days=120),
+        ),
     }
 
 
@@ -110,6 +146,16 @@ def _seed_transactions() -> dict[str, list[Transaction]]:
             Transaction("tx040", "client004", 750.00, "credit", "Venda Link Pagamento 3x", "completed", now - timedelta(hours=6)),
             Transaction("tx041", "client004", 400.00, "pix", "Recebimento Pix", "completed", now - timedelta(days=1)),
         ],
+        "client_pelissarog_gmail_com": [
+            Transaction("tx050", "client_pelissarog_gmail_com", 180.00, "credit", "Venda cartao credito", "completed", now - timedelta(hours=3)),
+            Transaction("tx051", "client_pelissarog_gmail_com", -42.50, "pix", "Transferencia Pix", "completed", now - timedelta(hours=5)),
+        ],
+        "client_pelissarog_gmail.com": [
+            Transaction("tx052", "client_pelissarog_gmail.com", 90.00, "debit", "Venda debito", "completed", now - timedelta(days=1)),
+        ],
+        "client_peli": [
+            Transaction("tx053", "client_peli", 120.00, "credit", "Venda cartao credito", "completed", now - timedelta(days=2)),
+        ],
     }
 
 
@@ -121,11 +167,19 @@ class InMemoryUserRepository(UserRepository):
         self._transactions = _seed_transactions()
 
     async def find_by_id(self, user_id: str) -> User | None:
-        return self._users.get(user_id)
+        direct = self._users.get(user_id)
+        if direct:
+            return direct
+
+        normalized_target = _normalize_identifier(user_id)
+        for key, user in self._users.items():
+            if _normalize_identifier(key) == normalized_target:
+                return user
+        return None
 
     async def find_by_email(self, email: str) -> User | None:
         for user in self._users.values():
-            if user.email == email:
+            if user.email.lower() == email.lower():
                 return user
         return None
 
@@ -138,3 +192,7 @@ class InMemoryUserRepository(UserRepository):
     async def get_account_balance(self, user_id: str) -> float | None:
         user = self._users.get(user_id)
         return user.balance if user else None
+
+
+def _normalize_identifier(value: str) -> str:
+    return "".join(char for char in (value or "").lower() if char.isalnum())

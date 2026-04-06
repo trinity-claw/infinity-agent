@@ -42,7 +42,8 @@ When you decide to escalate, provide:
 1. A calming message to the customer acknowledging their frustration
 2. Inform them they're being connected to a human specialist
 3. Provide an estimated wait time (simulated)
-4. Generate an escalation summary for the human agent
+4. Explicitly state that follow-up will continue asynchronously via WhatsApp and/or email
+5. Generate an escalation summary for the human agent
 
 ## Response Format (if NOT escalating)
 If the conversation doesn't require escalation, provide:

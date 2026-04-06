@@ -31,6 +31,7 @@ class EscalationSession:
     messages: list[EscalationMessage] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     active: bool = True
+    detail_notice_sent: bool = False
 
 
 class EscalationSessionStore:
@@ -129,6 +130,15 @@ class EscalationSessionStore:
         session = self._sessions.get(session_id)
         if session:
             session.active = False
+
+    def mark_detail_notice_sent(self, session_id: str) -> None:
+        session = self._sessions.get(session_id)
+        if session:
+            session.detail_notice_sent = True
+
+    def is_detail_notice_sent(self, session_id: str) -> bool:
+        session = self._sessions.get(session_id)
+        return bool(session and session.detail_notice_sent)
 
 
 def _normalize_number(phone: str) -> str:

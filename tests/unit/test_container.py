@@ -30,6 +30,7 @@ class FakeAsyncContextManager:
 def reset_container_singletons():
     """Reset module-level singletons so each test starts clean."""
     container._knowledge_store = None
+    container._user_repo = None
     container._checkpointer_cm = None
     container._checkpointer = None
     container._checkpointer_failed = False

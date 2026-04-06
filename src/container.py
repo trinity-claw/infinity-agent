@@ -19,6 +19,7 @@ from src.settings import settings
 logger = logging.getLogger(__name__)
 
 _knowledge_store: ChromaKnowledgeStore | None = None
+_user_repo: InMemoryUserRepository | None = None
 _checkpointer_cm: Any = None
 _checkpointer: Any = None
 _checkpointer_failed: bool = False
@@ -31,6 +32,14 @@ def get_knowledge_store() -> ChromaKnowledgeStore:
     if _knowledge_store is None:
         _knowledge_store = ChromaKnowledgeStore()
     return _knowledge_store
+
+
+def get_user_repository() -> InMemoryUserRepository:
+    """Return the user repository singleton (lazy-init)."""
+    global _user_repo
+    if _user_repo is None:
+        _user_repo = InMemoryUserRepository()
+    return _user_repo
 
 
 async def get_checkpointer():
@@ -117,7 +126,7 @@ async def get_swarm():
                 api_key=settings.brave_search_api_key,
                 base_url=settings.brave_search_base_url,
             ),
-            user_repo=InMemoryUserRepository(),
+            user_repo=get_user_repository(),
             ticket_repo=InMemoryTicketRepository(),
             checkpointer=checkpointer,
         )
