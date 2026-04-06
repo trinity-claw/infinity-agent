@@ -85,9 +85,34 @@ def _build_support_overlap_message(message: str) -> str:
             "service diagnostics."
         )
     return (
-        "Essa solicitacao parece um problema operacional de suporte, e nao uma duvida de base de "
+        "Essa solicitação parece um problema operacional de suporte, e não uma dúvida de base de "
         "conhecimento. Por favor, siga pelo fluxo de suporte/atendente humano para verificarmos "
-        "diagnostico em tempo real."
+        "diagnóstico em tempo real."
+    )
+
+
+def _format_web_results_for_prompt(web_results: list) -> str:
+    """Format web search results for synthesis prompt."""
+    return "\n\n".join(
+        [
+            f"{idx}. {item.title}\n{item.snippet}\nURL: {item.url}"
+            for idx, item in enumerate(web_results, start=1)
+        ]
+    )
+
+
+def _build_web_synthesis_prompt(formatted_results: str) -> str:
+    """Prompt for deterministic web-answer synthesis."""
+    return (
+        "Você é um agente de resposta baseado em resultados de busca web.\n"
+        "Use SOMENTE os resultados abaixo.\n"
+        "Regras:\n"
+        "1) Responda em português do Brasil.\n"
+        "2) Não repita a pergunta do usuário.\n"
+        "3) Traga um resumo direto e, quando fizer sentido, bullets com os destaques.\n"
+        "4) Cite 3 a 5 fontes com URL ao final.\n"
+        "5) Se a pergunta for sobre 'hoje', deixe claro que o cenário pode mudar ao longo do dia.\n\n"
+        f"Resultados web:\n{formatted_results}"
     )
 
 
@@ -134,6 +159,61 @@ def create_knowledge_node(
                 "metadata": {
                     **state.get("metadata", {}),
                     "knowledge_overlap_fallback": True,
+                },
+            }
+
+        # Deterministic web path for non-InfinitePay/general queries.
+        # This avoids low-value tool-calling misses and echo responses.
+        if user_message and not _is_infinitepay_query(user_message):
+            logger.info(
+                "Knowledge deterministic web-search path message=%s",
+                user_message[:120],
+            )
+            web_results = await web_searcher.search(user_message, max_results=6)
+            if web_results:
+                formatted = _format_web_results_for_prompt(web_results)
+                synthesis_prompt = _build_web_synthesis_prompt(formatted)
+                synthesized = await get_knowledge_llm().ainvoke(
+                    [
+                        SystemMessage(content=synthesis_prompt),
+                        HumanMessage(content=user_message),
+                    ]
+                )
+                synthesized_text = str(synthesized.content or "").strip()
+                if _looks_like_echo_response(user_message, synthesized_text):
+                    synthesized_text = (
+                        "Encontrei resultados na web, mas não consegui montar uma resposta confiável. "
+                        "Tente reformular sua pergunta com mais contexto."
+                    )
+
+                return {
+                    "messages": [
+                        AIMessage(
+                            content=synthesized_text,
+                            name="knowledge",
+                        )
+                    ],
+                    "metadata": {
+                        **state.get("metadata", {}),
+                        "knowledge_deterministic_web_search": True,
+                        "knowledge_web_results_count": len(web_results),
+                    },
+                }
+
+            return {
+                "messages": [
+                    AIMessage(
+                        content=(
+                            "Não consegui recuperar fontes web confiáveis agora. "
+                            "Tente novamente em instantes ou reformule a pergunta."
+                        ),
+                        name="knowledge",
+                    )
+                ],
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "knowledge_deterministic_web_search": True,
+                    "knowledge_web_search_empty": True,
                 },
             }
 
@@ -192,66 +272,6 @@ def create_knowledge_node(
                         name="knowledge",
                     )
                 ],
-            }
-
-        # No tool calls - force web search for out-of-domain/general questions.
-        if (
-            user_message
-            and not _is_infinitepay_query(user_message)
-            and _looks_like_echo_response(user_message, str(response.content or ""))
-        ):
-            logger.info(
-                "Knowledge forced web-search fallback (echo/no-tool) message=%s",
-                user_message[:120],
-            )
-            web_results = await web_searcher.search(user_message, max_results=5)
-            if web_results:
-                formatted = "\n\n".join(
-                    [
-                        f"{idx}. {item.title}\n{item.snippet}\nURL: {item.url}"
-                        for idx, item in enumerate(web_results, start=1)
-                    ]
-                )
-                synthesis_prompt = (
-                    "Use only the web results below to answer the user. "
-                    "Be concise, mention that the information comes from web sources, "
-                    "and include the URLs when useful.\n\n"
-                    f"Web results:\n{formatted}"
-                )
-                forced_response = await get_knowledge_llm().ainvoke(
-                    [
-                        SystemMessage(content=synthesis_prompt),
-                        HumanMessage(content=user_message),
-                    ]
-                )
-                return {
-                    "messages": [
-                        AIMessage(
-                            content=str(forced_response.content or "").strip(),
-                            name="knowledge",
-                        )
-                    ],
-                    "metadata": {
-                        **state.get("metadata", {}),
-                        "knowledge_forced_web_search": True,
-                    },
-                }
-
-            return {
-                "messages": [
-                    AIMessage(
-                        content=(
-                            "Nao consegui recuperar fontes web confiaveis agora. "
-                            "Tente reformular a pergunta ou tente novamente em instantes."
-                        ),
-                        name="knowledge",
-                    )
-                ],
-                "metadata": {
-                    **state.get("metadata", {}),
-                    "knowledge_forced_web_search": True,
-                    "knowledge_web_search_empty": True,
-                },
             }
 
         # No tool calls - LLM answered directly.

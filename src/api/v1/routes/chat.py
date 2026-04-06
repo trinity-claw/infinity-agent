@@ -298,15 +298,15 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
 
             for node_name, node_update in update.items():
                 if node_name == "input_guard":
-                    yield _sse_event("status", {"message": "Validando seguranca da mensagem..."})
+                    yield _sse_event("status", {"message": "Validando segurança da mensagem..."})
                 elif node_name == "router":
-                    yield _sse_event("status", {"message": "Router classificando intencao..."})
+                    yield _sse_event("status", {"message": "Router classificando intenção..."})
                 elif node_name == "knowledge":
                     yield _sse_event("status", {"message": "Consultando base e web..."})
                 elif node_name == "support":
                     yield _sse_event("status", {"message": "Executando ferramentas de suporte..."})
                 elif node_name == "sentiment":
-                    yield _sse_event("status", {"message": "Avaliando urgencia/escalacao..."})
+                    yield _sse_event("status", {"message": "Avaliando urgência/escalonamento..."})
                 elif node_name == "output_guard":
                     yield _sse_event("status", {"message": "Finalizando resposta..."})
 
@@ -336,7 +336,7 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
                         guardrail_blocked = True
 
         if not final_text:
-            final_text = "Desculpe, nao consegui processar sua mensagem. Tente novamente."
+            final_text = "Desculpe, não consegui processar sua mensagem. Tente novamente."
 
         if escalated:
             active_session = session_store.get_session_by_user(thread_id)

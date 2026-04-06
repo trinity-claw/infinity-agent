@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # --- LLM Models (OpenRouter model IDs) ---
     router_model: str = "openai/gpt-4o-mini"
-    knowledge_model: str = "openai/gpt-4o-mini"
+    knowledge_model: str = "google/gemini-2.5-flash"
     support_model: str = "anthropic/claude-sonnet-4.5"
     sentiment_model: str = "openai/gpt-4o-mini"
     guardrail_model: str = "openai/gpt-4o-mini"
