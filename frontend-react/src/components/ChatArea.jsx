@@ -50,7 +50,7 @@ const ChatArea = ({ messages, typing, streamStatus, onSendMessage, userProfile, 
           </button>
           <div className="header-title">
             <h1>Infinity Agent</h1>
-            <span className="header-subtitle">O assistente da Infinite Pay</span>
+            <span className="header-subtitle">O assistente inteligente da Infinite Pay</span>
           </div>
         </div>
         <div className="header-right">
