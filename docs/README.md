@@ -16,6 +16,8 @@ This folder contains evaluator-facing technical documentation.
   - Curated presentation/rehearsal question matrix with acceptance criteria.
 - `MOCK_DATA.md`
   - Seeded in-memory accounts and recommended user IDs for support demos.
+- `FINAL_REVIEW.md`
+  - Final evaluator-facing review with compliance status, risk notes, and go/no-go checklist.
 
 ## Architecture Review
 
