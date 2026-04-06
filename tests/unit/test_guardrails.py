@@ -156,3 +156,9 @@ class TestPiiMasking:
         result = _mask_pii(text)
         assert "111.222.333-44" not in result
         assert "joao@test.com" not in result
+
+    def test_phone_masked(self):
+        text = "Telefone cadastrado: +55 (11) 99999-1234"
+        result = _mask_pii(text)
+        assert "99999-1234" not in result
+        assert "***-***-1234" in result

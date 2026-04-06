@@ -35,3 +35,14 @@ def test_get_session_by_operator_number_matches_incomplete_operator_number() -> 
     session_id = store.create_session(user_id="client_3", operator_number="551199979406")
     by_complete = store.get_session_by_operator_number("5511999794061")
     assert by_complete is not None and by_complete.session_id == session_id
+
+
+def test_validate_session_token() -> None:
+    store = EscalationSessionStore()
+    session_id = store.create_session(user_id="client_4", operator_number="5511999794061")
+    session = store.get_session(session_id)
+    assert session is not None
+
+    assert store.validate_session_token(session_id, session.session_token) is True
+    assert store.validate_session_token(session_id, "invalid") is False
+    assert store.validate_session_token(session_id, None) is False
