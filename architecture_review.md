@@ -2,8 +2,6 @@
 
 This is the active architecture review for the current implementation.
 
-> Legacy planning artifacts were archived to `docs/archive/`.
-
 ## 1) System Purpose
 
 Infinity Agent is a multi-agent support system for InfinitePay challenge scenarios.

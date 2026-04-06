@@ -49,6 +49,19 @@ Edit `.env`:
 docker compose up -d --build
 ```
 
+This starts the core API service (`infinity-agent`).
+
+If you also want to run Evolution API from this compose file:
+
+```bash
+docker compose --profile whatsapp up -d evolution-api
+```
+
+If Evolution API is already running in another stack/host, keep this profile disabled and only configure:
+- `WHATSAPP_API_URL`
+- `WHATSAPP_API_TOKEN`
+- `WHATSAPP_INSTANCE`
+
 Check health:
 
 ```bash
@@ -91,7 +104,7 @@ sudo certbot --nginx -d YOUR_DOMAIN
 
 ## 5) Evolution API Instance Setup
 
-Assuming Evolution API is exposed locally on `http://127.0.0.1:8080`.
+Assuming Evolution API is exposed on `http://127.0.0.1:8080` (or your configured URL).
 
 Create instance:
 

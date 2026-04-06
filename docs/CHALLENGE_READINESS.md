@@ -130,5 +130,4 @@ docker compose exec infinity-agent python scripts/evaluator_smoke.py --base-url 
 
 ## Notes
 
-- Legacy planning artifacts are archived in `docs/archive/`.
 - Current architecture reference is root `architecture_review.md`.

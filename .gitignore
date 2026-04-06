@@ -59,6 +59,7 @@ htmlcov/
 #private_docs/
 private_docs/
 .superdesign
+docs/archive/
 
 # Local migration snapshots (keep local, do not version)
 old_*.js

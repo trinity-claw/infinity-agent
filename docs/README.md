@@ -21,11 +21,3 @@ This folder contains evaluator-facing technical documentation.
 
 - Root `architecture_review.md`
   - Current architecture review for this implementation.
-
-## Archives
-
-- `archive/architecture_review_legacy.md`
-- `archive/implementation_plan_legacy.md`
-- `archive/CHECKLIST_legacy.md`
-
-Archived files are kept for historical traceability only and are not canonical references for the current implementation.

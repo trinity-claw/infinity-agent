@@ -158,6 +158,10 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Default behavior:
+- Starts the core service (`infinity-agent`) only.
+- This guarantees evaluator-friendly startup even if WhatsApp/Evolution is not configured.
+
 - API: `http://localhost:8000`
 - Health: `http://localhost:8000/v1/health`
 
@@ -166,6 +170,17 @@ If this is your first run and the knowledge base is empty, ingest content once:
 ```bash
 docker compose exec infinity-agent python -m scripts.ingest
 ```
+
+To also run Evolution API from this compose file:
+
+```bash
+docker compose --profile whatsapp up -d evolution-api
+```
+
+If you already have an external Evolution API instance, keep the profile disabled and point:
+- `WHATSAPP_API_URL`
+- `WHATSAPP_API_TOKEN`
+- `WHATSAPP_INSTANCE`
 
 ### Evaluator Quick Start (5-Minute Path)
 
@@ -265,7 +280,3 @@ Main integration points:
 ## Documentation Index
 
 See `docs/README.md` for the complete documentation map.
-
-## Legacy Files
-
-Older planning artifacts were archived to `docs/archive/` to keep the evaluator path clean while preserving project history.
