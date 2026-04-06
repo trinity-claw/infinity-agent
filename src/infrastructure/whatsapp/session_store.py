@@ -45,6 +45,11 @@ class EscalationSessionStore:
 
     def create_session(self, user_id: str, operator_number: str) -> str:
         """Create a new escalation session and return its session_id."""
+        # Keep a single active handoff per user to avoid stale-session drift.
+        previous_session = self.get_session_by_user(user_id)
+        if previous_session and previous_session.active:
+            previous_session.active = False
+
         session_id = f"ESC-{uuid.uuid4().hex[:8].upper()}"
         session = EscalationSession(
             session_id=session_id,
@@ -75,6 +80,13 @@ class EscalationSessionStore:
         if session_id:
             session = self._sessions.get(session_id)
             if session and session.active:
+                return session
+
+        # Fuzzy fallback for provider inconsistencies (country code, 9th digit, etc.).
+        for session in self._sessions.values():
+            if not session.active:
+                continue
+            if _numbers_match(normalized, _normalize_number(session.operator_number)):
                 return session
         return None
 
@@ -115,6 +127,19 @@ class EscalationSessionStore:
 def _normalize_number(phone: str) -> str:
     """Strip non-digit characters for fuzzy phone number matching."""
     return "".join(c for c in phone if c.isdigit())
+
+
+def _numbers_match(a: str, b: str) -> bool:
+    """Loose phone matching using canonical suffixes."""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    # Compare last 8-11 digits to handle DDI/DDD/injected 9th digit variance.
+    for size in (11, 10, 9, 8):
+        if len(a) >= size and len(b) >= size and a[-size:] == b[-size:]:
+            return True
+    return False
 
 
 # Module-level singleton used by tools and routes

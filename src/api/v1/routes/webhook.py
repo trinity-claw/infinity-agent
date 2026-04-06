@@ -38,7 +38,12 @@ def _is_operator_system_message(text: str) -> bool:
     """Identify escalation/system templates sent by the backend itself."""
     if not text:
         return True
+    upper_text = text.upper()
     if text.startswith("🚨 *ESCALAMENTO"):
+        return True
+    if "ESCALAMENTO" in upper_text:
+        return True
+    if "SESS" in upper_text and "ESC-" in upper_text:
         return True
     if text.startswith("*[User "):
         return True
@@ -192,12 +197,12 @@ async def evolution_webhook(request: Request, background_tasks: BackgroundTasks)
 
     if from_me:
         # Last-resort fallback for self-chat when configured operator number
-        # does not exactly match remoteJid. Only safe when there is a single
-        # active escalation session.
+        # does not exactly match remoteJid.
         if not _is_operator_system_message(text):
             active_sessions = session_store.get_active_sessions()
-            if len(active_sessions) == 1:
-                fallback_session = active_sessions[0]
+            if active_sessions:
+                # Prefer the latest active session to keep handoff continuity.
+                fallback_session = max(active_sessions, key=lambda session: session.created_at)
                 session_store.add_message(fallback_session.session_id, sender="agent", content=text)
                 logger.info(
                     "[Webhook] fallback stored self-chat reply session=%s phone=%s",
