@@ -2,7 +2,7 @@
 
 Last updated: 2026-04-06  
 Repository branch: `main`  
-Reviewed commit: `ff4323d`
+Reviewed commit: `HEAD`
 
 ## 1) Executive Summary
 
@@ -156,7 +156,7 @@ uv run pytest -q
 
 Result:
 
-- `71 passed, 6 warnings`
+- `85 passed, 7 warnings`
 
 Current warning note:
 
@@ -201,8 +201,8 @@ Legacy/stale docs were removed from active navigation and `docs/archive/` is ign
    - Mitigation: document seeded IDs and expected behavior (`docs/MOCK_DATA.md`).
 3. Prompt quality validation may vary if promptfoo is not run before presentation.
    - Mitigation: run `npx promptfoo@latest eval` in final rehearsal.
-4. Minor text encoding artifacts may appear in some legacy strings/comments.
-   - Mitigation: perform final ASCII/UTF-8 normalization sweep before final evaluator share.
+4. Web handoff continuity is intentionally asynchronous.
+   - Mitigation: escalation responses and WhatsApp notices explicitly instruct continuity via WhatsApp/email.
 
 ## 11) Final Go/No-Go Checklist
 

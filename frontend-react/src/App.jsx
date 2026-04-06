@@ -323,7 +323,7 @@ function App() {
   };
 
   const handleClearChat = () => {
-    if (confirm('Tem certeza que deseja apagar todo o historico?')) {
+    if (confirm('Tem certeza que deseja apagar todo o histórico?')) {
       setMessages([]);
       setActiveSessionId(null);
       localStorage.removeItem('infinity_active_session_id');

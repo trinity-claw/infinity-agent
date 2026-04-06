@@ -7,12 +7,12 @@ const SUGGESTION_GROUPS = [
   {
     id: 'products',
     label: 'Produtos e taxas',
-    description: 'Perguntas sobre solucoes, taxas e funcionalidades da InfinitePay.',
+    description: 'Perguntas sobre soluções, taxas e funcionalidades da InfinitePay.',
     items: [
       {
         title: 'Taxas da Maquininha Smart',
-        description: 'Entenda as taxas de debito e credito para vendas presenciais.',
-        message: 'Quais sao as taxas da Maquininha Smart para debito e credito?',
+        description: 'Entenda as taxas de débito e crédito para vendas presenciais.',
+        message: 'Quais são as taxas da Maquininha Smart para débito e crédito?',
       },
       {
         title: 'Como funciona o InfiniteTap',
@@ -21,7 +21,7 @@ const SUGGESTION_GROUPS = [
       },
       {
         title: 'Pix Parcelado',
-        description: 'Tire duvidas sobre parcelamento via Pix.',
+        description: 'Tire dúvidas sobre parcelamento via Pix.',
         message: 'Como funciona o Pix Parcelado da InfinitePay?',
       },
       {
@@ -34,33 +34,33 @@ const SUGGESTION_GROUPS = [
   {
     id: 'support',
     label: 'Suporte de conta',
-    description: 'Diagnosticos de acesso, transferencias, saldo e historico.',
+    description: 'Diagnósticos de acesso, transferências, saldo e histórico.',
     items: [
       {
-        title: 'Nao consigo acessar minha conta',
-        description: 'Fluxo de suporte para login e recuperacao de acesso.',
-        message: 'Nao consigo acessar minha conta. Pode me ajudar com os proximos passos?',
+        title: 'Não consigo acessar minha conta',
+        description: 'Fluxo de suporte para login e recuperação de acesso.',
+        message: 'Não consigo acessar minha conta. Pode me ajudar com os próximos passos?',
       },
       {
-        title: 'Transferencia falhando',
-        description: 'Investigacao para problemas em transferencias.',
-        message: 'Por que nao estou conseguindo fazer transferencias agora?',
+        title: 'Transferência falhando',
+        description: 'Investigação para problemas em transferências.',
+        message: 'Por que não estou conseguindo fazer transferências agora?',
       },
       {
-        title: 'Consultar saldo disponivel',
-        description: 'Checagem rapida do saldo da conta.',
-        message: 'Quero consultar meu saldo disponivel agora.',
+        title: 'Consultar saldo disponível',
+        description: 'Checagem rápida do saldo da conta.',
+        message: 'Quero consultar meu saldo disponível agora.',
       },
       {
-        title: 'Historico de transacoes',
-        description: 'Ultimas movimentacoes para conferencia.',
-        message: 'Mostre meu historico recente de transacoes, por favor.',
+        title: 'Histórico de transações',
+        description: 'Últimas movimentações para conferência.',
+        message: 'Mostre meu histórico recente de transações, por favor.',
       },
     ],
   },
   {
     id: 'escalation',
-    label: 'Escalacao humana',
+    label: 'Escalação humana',
     description: 'Atalhos para transferir o atendimento para um humano.',
     items: [
       {
@@ -70,7 +70,7 @@ const SUGGESTION_GROUPS = [
       },
       {
         title: 'Problema urgente',
-        description: 'Sinaliza urgencia para priorizacao do atendimento.',
+        description: 'Sinaliza urgência para priorização do atendimento.',
         message: 'Estou com um problema urgente e preciso de suporte humano agora.',
       },
     ],
@@ -81,14 +81,14 @@ const SUGGESTION_GROUPS = [
     description: 'Exemplos de perguntas fora do escopo de produtos.',
     items: [
       {
-        title: 'Ultimo jogo do Palmeiras',
+        title: 'Último jogo do Palmeiras',
         description: 'Exemplo de busca web para pergunta geral.',
-        message: 'Quando foi o ultimo jogo do Palmeiras?',
+        message: 'Quando foi o último jogo do Palmeiras?',
       },
       {
-        title: 'Noticias de Sao Paulo hoje',
+        title: 'Notícias de São Paulo hoje',
         description: 'Exemplo de pergunta de atualidades.',
-        message: 'Quais as principais noticias de Sao Paulo hoje?',
+        message: 'Quais as principais notícias de São Paulo hoje?',
       },
     ],
   },
@@ -163,7 +163,7 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
               )}
             </div>
             <div className="auth-session-meta">
-              <span className="auth-session-name">{userProfile.name || 'Usuario autenticado'}</span>
+              <span className="auth-session-name">{userProfile.name || 'Usuário autenticado'}</span>
               <span className="auth-session-email">{userProfile.email}</span>
             </div>
           </div>
@@ -188,7 +188,7 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
       </div>
 
       <div className="sidebar-section">
-        <div className="sidebar-label">Sugestoes guiadas</div>
+        <div className="sidebar-label">Sugestões guiadas</div>
         <div className="suggestions-toolbar">
           <span className="suggestions-label">Categoria</span>
           <div className="suggestions-dropdown" ref={suggestionDropdownRef}>
@@ -210,7 +210,7 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
             </button>
 
             {suggestionMenuOpen && (
-              <div className="suggestions-dropdown-menu" role="listbox" aria-label="Categorias de sugestoes">
+              <div className="suggestions-dropdown-menu" role="listbox" aria-label="Categorias de sugestões">
                 {SUGGESTION_GROUPS.map((group) => {
                   const isActive = group.id === selectedSuggestionGroup;
                   return (
@@ -250,7 +250,7 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
         <div className="sidebar-label">System Actions</div>
         <div className="quick-actions">
           <button type="button" id="clearBtn" onClick={onClearChat} className="quick-btn">
-            Limpar Historico Local
+            Limpar Histórico Local
           </button>
         </div>
       </div>

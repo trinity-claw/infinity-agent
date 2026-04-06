@@ -18,6 +18,8 @@ This folder contains evaluator-facing technical documentation.
   - Seeded in-memory accounts and recommended user IDs for support demos.
 - `FINAL_REVIEW.md`
   - Final evaluator-facing review with compliance status, risk notes, and go/no-go checklist.
+- `POST_DEPLOY_CHECKLIST.md`
+  - Fast validation checklist for VPS deploy (streaming, Brave search, and human handoff).
 
 ## Architecture Review
 

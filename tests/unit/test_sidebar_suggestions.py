@@ -17,7 +17,9 @@ def test_removed_unsupported_service_status_suggestion() -> None:
     """The unsupported service-status quick suggestion should not be present."""
     content = SIDEBAR_PATH.read_text(encoding="utf-8")
     assert "Status dos servicos" not in content
+    assert "Status dos serviços" not in content
     assert "status atual dos servicos da InfinitePay" not in content
+    assert "status atual dos serviços da InfinitePay" not in content
 
 
 def test_curated_quick_suggestions_still_include_handoff() -> None:
@@ -38,6 +40,6 @@ def test_sidebar_uses_dropdown_suggestion_groups() -> None:
     content = SIDEBAR_PATH.read_text(encoding="utf-8")
     assert "SUGGESTION_GROUPS" in content
     assert "suggestionGroupSelect" in content
-    assert "Sugestoes guiadas" in content
+    assert "Sugestões guiadas" in content
     assert "setSelectedSuggestionGroup" in content
     assert "suggestions-dropdown-trigger" in content

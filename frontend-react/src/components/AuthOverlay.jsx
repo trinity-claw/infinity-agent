@@ -63,7 +63,7 @@ const AuthOverlay = ({ onAuthSuccess }) => {
   const handleSuccess = (credentialResponse) => {
     const credential = credentialResponse?.credential;
     if (!credential) {
-      setErrorMsg('Nao foi possivel obter uma credencial valida do Google.');
+      setErrorMsg('Não foi possível obter uma credencial válida do Google.');
       return;
     }
 
@@ -71,7 +71,7 @@ const AuthOverlay = ({ onAuthSuccess }) => {
       const decodedUser = jwtDecode(credential);
       const email = normalizeEmail(decodedUser?.email || '');
       if (!email) {
-        setErrorMsg('A credencial retornada nao contem e-mail.');
+        setErrorMsg('A credencial retornada não contém e-mail.');
         return;
       }
 
@@ -85,7 +85,7 @@ const AuthOverlay = ({ onAuthSuccess }) => {
 
       if (!isAllowed) {
         setErrorMsg(
-          'Acesso restrito. Este e-mail nao atende as regras de autorizacao configuradas.',
+          'Acesso restrito. Este e-mail não atende às regras de autorização configuradas.',
         );
         return;
       }
@@ -114,7 +114,7 @@ const AuthOverlay = ({ onAuthSuccess }) => {
   };
 
   const handleError = () => {
-    setErrorMsg('Falha na comunicacao com o Google.');
+    setErrorMsg('Falha na comunicação com o Google.');
   };
 
   return (
@@ -128,8 +128,8 @@ const AuthOverlay = ({ onAuthSuccess }) => {
           </svg>
         </div>
 
-        <h2>Area Restrita</h2>
-        <p>Faca login com Google para acessar o Infinity Agent.</p>
+        <h2>Área Restrita</h2>
+        <p>Faça login com Google para acessar o Infinity Agent.</p>
 
         {errorMsg && <div className="auth-error">{errorMsg}</div>}
 
@@ -151,7 +151,7 @@ const AuthOverlay = ({ onAuthSuccess }) => {
         </div>
 
         <p className="auth-footer">
-          Acesso permitido apenas para e-mails autorizados por allowlist/padrao.
+          Acesso permitido apenas para e-mails autorizados por allowlist/padrão.
         </p>
       </div>
     </div>

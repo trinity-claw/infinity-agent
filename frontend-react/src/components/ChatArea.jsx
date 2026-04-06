@@ -76,16 +76,16 @@ const ChatArea = ({ messages, typing, streamStatus, onSendMessage, userProfile, 
                 <path d="M26 32L30 36L38 27" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h2>{firstName ? `Ola, ${firstName}! Como posso ajudar?` : 'Ola! Como posso ajudar?'}</h2>
+            <h2>{firstName ? `Olá, ${firstName}! Como posso ajudar?` : 'Olá! Como posso ajudar?'}</h2>
             <p>
               Sou o assistente de IA da InfinitePay. Posso responder perguntas sobre produtos, ajudar com sua conta ou
-              buscar informacoes gerais.
+              buscar informações gerais.
             </p>
             <div className="welcome-chips">
-              <button className="chip" type="button" onClick={() => sendSuggestion('Quais sao os produtos da InfinitePay?')}>
-                Produtos disponiveis
+              <button className="chip" type="button" onClick={() => sendSuggestion('Quais são os produtos da InfinitePay?')}>
+                Produtos disponíveis
               </button>
-              <button className="chip" type="button" onClick={() => sendSuggestion('Qual e a taxa do Pix na InfinitePay?')}>
+              <button className="chip" type="button" onClick={() => sendSuggestion('Qual é a taxa do Pix na InfinitePay?')}>
                 Taxa do Pix
               </button>
               <button className="chip" type="button" onClick={() => sendSuggestion('Como gerar um link de pagamento?')}>
@@ -143,8 +143,8 @@ const ChatArea = ({ messages, typing, streamStatus, onSendMessage, userProfile, 
                         d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                       />
                     </svg>
-                    Aviso: Um atendente humano foi notificado e assumiu esta conversa. As proximas mensagens serao
-                    encaminhadas para ele via WhatsApp.
+                    Aviso: Um atendente humano foi notificado e assumiu esta conversa. As próximas mensagens serão
+                    encaminhadas para ele via WhatsApp (retorno assíncrono).
                   </div>
                 )}
               </div>
