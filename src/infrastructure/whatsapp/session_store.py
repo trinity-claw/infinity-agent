@@ -10,6 +10,7 @@ conversation with the human operator. Lifecycle:
 
 from __future__ import annotations
 
+import secrets
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ class EscalationMessage:
 @dataclass
 class EscalationSession:
     session_id: str
+    session_token: str
     user_id: str
     operator_number: str  # WhatsApp number that received the escalation notice
     messages: list[EscalationMessage] = field(default_factory=list)
@@ -54,6 +56,7 @@ class EscalationSessionStore:
         session_id = f"ESC-{uuid.uuid4().hex[:8].upper()}"
         session = EscalationSession(
             session_id=session_id,
+            session_token=secrets.token_urlsafe(24),
             user_id=user_id,
             operator_number=operator_number,
         )
@@ -73,6 +76,15 @@ class EscalationSessionStore:
         if session_id:
             return self._sessions.get(session_id)
         return None
+
+    def validate_session_token(self, session_id: str, session_token: str | None) -> bool:
+        """Validate session token for protected handoff operations."""
+        if not session_token:
+            return False
+        session = self._sessions.get(session_id)
+        if not session:
+            return False
+        return secrets.compare_digest(session.session_token, session_token)
 
     def get_session_by_operator_number(self, phone: str) -> Optional[EscalationSession]:
         """Find the active session associated with an operator's phone number."""

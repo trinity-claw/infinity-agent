@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 import src.container as container
 from src.agents.swarm_config import build_swarm_config
+from src.api.security import enforce_sensitive_endpoint_auth
 from src.infrastructure.whatsapp import client as whatsapp_client
 from src.infrastructure.whatsapp.session_store import session_store
 from src.settings import settings
@@ -142,6 +143,7 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
 )
 async def evolution_webhook(request: Request, background_tasks: BackgroundTasks) -> dict:
     """Handle incoming requests from Evolution API."""
+    enforce_sensitive_endpoint_auth(request)
     payload = await request.json()
 
     event = str(payload.get("event") or "")
