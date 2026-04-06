@@ -16,6 +16,8 @@ This folder contains evaluator-facing technical documentation.
   - Curated test scenarios with expected routes and acceptance criteria.
 - `MOCK_DATA.md`
   - Seeded in-memory accounts and recommended user IDs for support demos.
+- `DATABASE_STATE.md`
+  - Current data layer snapshot: SQLite checkpointer, ChromaDB state, and in-memory repositories.
 
 ## Architecture Reference
 
