@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
+import agentLogo from '../../infinity-agent-logo.png';
 
 const normalizeEmail = (value = '') => value.trim().toLowerCase();
 const normalizeText = (value = '') =>
@@ -119,40 +120,72 @@ const AuthOverlay = ({ onAuthSuccess }) => {
 
   return (
     <div className="auth-overlay">
-      <div className="auth-modal">
-        <div className="auth-logo">
-          <svg viewBox="0 0 64 64" fill="none">
-            <circle cx="32" cy="32" r="30" stroke="#00E676" strokeWidth="2" strokeDasharray="4 4" />
-            <path d="M32 16L44 38H20L32 16Z" fill="#00E676" opacity="0.8" />
-            <circle cx="32" cy="44" r="4" fill="#00E676" />
-          </svg>
-        </div>
-
-        <h2>Área Restrita</h2>
-        <p>Faça login com Google para acessar o Infinity Agent.</p>
-
-        {errorMsg && <div className="auth-error">{errorMsg}</div>}
-
-        <div className="auth-btn-wrapper">
-          {googleClientId ? (
-            <GoogleLogin
-              onSuccess={handleSuccess}
-              onError={handleError}
-              theme="filled_black"
-              shape="pill"
-              text="signin_with"
-              locale="pt-BR"
-            />
-          ) : (
-            <div className="auth-missing-config">
-              Defina <code>VITE_GOOGLE_CLIENT_ID</code> no ambiente do frontend.
+      <div className="auth-shell">
+        <section className="auth-brand-panel">
+          <div className="auth-brand-header">
+            <img src={agentLogo} alt="Infinity Agent" className="auth-brand-logo" />
+            <div className="auth-brand-copy">
+              <span className="auth-brand-kicker">Infinity Agent</span>
+              <span className="auth-brand-subkicker">AI Swarm Platform</span>
             </div>
-          )}
-        </div>
+          </div>
 
-        <p className="auth-footer">
-          Acesso permitido apenas para e-mails autorizados por allowlist/padrão.
-        </p>
+          <h1 className="auth-brand-title">Central Inteligente de Atendimento InfinitePay</h1>
+          <p className="auth-brand-description">
+            Acesse a plataforma oficial para operar o swarm de agentes com roteamento automático,
+            suporte operacional e handoff humano.
+          </p>
+
+          <div className="auth-feature-list">
+            <div className="auth-feature-item">
+              <span className="auth-feature-dot" />
+              <span>Router + especialistas (Knowledge, Support e Sentiment)</span>
+            </div>
+            <div className="auth-feature-item">
+              <span className="auth-feature-dot" />
+              <span>RAG com dados InfinitePay e busca web em tempo real</span>
+            </div>
+            <div className="auth-feature-item">
+              <span className="auth-feature-dot" />
+              <span>Escalação assistida para atendimento humano</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="auth-login-panel">
+          <div className="auth-login-icon">
+            <svg viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <circle cx="32" cy="32" r="30" stroke="#00E676" strokeWidth="2" strokeDasharray="4 4" />
+              <path d="M20 34L30 44L46 22" stroke="#00E676" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          <h2>Entrar na Plataforma</h2>
+          <p>Faça login com sua conta Google autorizada para acessar o Infinity Agent.</p>
+
+          {errorMsg && <div className="auth-error">{errorMsg}</div>}
+
+          <div className="auth-btn-wrapper">
+            {googleClientId ? (
+              <GoogleLogin
+                onSuccess={handleSuccess}
+                onError={handleError}
+                theme="filled_black"
+                shape="pill"
+                text="signin_with"
+                locale="pt-BR"
+              />
+            ) : (
+              <div className="auth-missing-config">
+                Defina <code>VITE_GOOGLE_CLIENT_ID</code> no ambiente do frontend.
+              </div>
+            )}
+          </div>
+
+          <p className="auth-footer">
+            Acesso permitido apenas para e-mails autorizados por allowlist/padrão.
+          </p>
+        </section>
       </div>
     </div>
   );
