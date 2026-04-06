@@ -1,11 +1,12 @@
-"""Evolution API Webhook Routes.
+"""Evolution API webhook routes.
 
-Handles incoming messages from WhatsApp users via Evolution API.
+Handles incoming WhatsApp events from Evolution API.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Request
@@ -22,19 +23,39 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Webhook"])
 
 
+def _extract_message_text(data: dict[str, Any]) -> str:
+    """Extract text from common Evolution message payload shapes."""
+    msg = data.get("message", {})
+    return (
+        msg.get("conversation")
+        or msg.get("extendedTextMessage", {}).get("text")
+        or msg.get("imageMessage", {}).get("caption")
+        or ""
+    ).strip()
+
+
+def _is_operator_system_message(text: str) -> bool:
+    """Identify escalation/system templates sent by the backend itself."""
+    if not text:
+        return True
+    if text.startswith("🚨 *ESCALAMENTO"):
+        return True
+    if text.startswith("*[User "):
+        return True
+    # Chat->operator bridge format: *<name>:* <message>
+    if re.match(r"^\*[^*:\n]{1,120}:\*\s", text):
+        return True
+    return False
+
+
 async def process_whatsapp_message(phone: str, text: str, message_id: str) -> None:
-    """Run the agent swarm in the background and reply to WhatsApp."""
-    # Check if this user is currently in a human handoff session
+    """Run the swarm in background and reply to WhatsApp."""
     session = session_store.get_session_by_user(phone)
     if session and session.active:
-        # User is talking to a human operator — forward message and skip AI
+        # User is in human handoff: forward to operator and skip AI.
         session_store.add_message(session.session_id, sender="user", content=text)
         if settings.whatsapp_enabled:
-            # We prefix so the operator knows who is talking
-            whatsapp_client.send_message(
-                session.operator_number,
-                f"*[User {phone}]:* {text}"
-            )
+            whatsapp_client.send_message(session.operator_number, f"*[User {phone}]:* {text}")
         return
 
     swarm = await container.get_swarm()
@@ -47,7 +68,6 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
     thread_id = configurable["thread_id"]
     checkpoint_ns = configurable["checkpoint_ns"]
 
-    # Initial state
     initial_state = {
         "messages": [HumanMessage(content=text)],
         "user_id": thread_id,
@@ -71,22 +91,18 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
         )
         result = await swarm.ainvoke(initial_state, config=config)
 
-        # Extract final AI response
         response_text = ""
         for msg in reversed(result.get("messages", [])):
             if hasattr(msg, "content") and msg.content:
                 name = getattr(msg, "name", "")
-                if name not in ("router"):
+                if name not in ("router",):
                     response_text = msg.content
                     break
 
         if not response_text:
-            response_text = "Desculpe, ocorreu um erro ao processar sua solicitação."
+            response_text = "Desculpe, ocorreu um erro ao processar sua solicitacao."
 
-        # Map Markdown bold to WhatsApp bold
         wa_text = response_text.replace("**", "*")
-
-        # Reply via WhatsApp
         if settings.whatsapp_enabled:
             whatsapp_client.send_message(phone, wa_text)
         else:
@@ -105,57 +121,56 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
         if settings.whatsapp_enabled:
             whatsapp_client.send_message(
                 phone,
-                "Desculpe, nossos sistemas estão instáveis no momento. Tente novamente mais tarde."
+                "Desculpe, nossos sistemas estao instaveis no momento. Tente novamente mais tarde.",
             )
 
 
 @router.post(
     "/webhook",
-    summary="Evolution API Webhook",
+    summary="Evolution API webhook",
     description="Receives MESSAGES_UPSERT events and processes them in background.",
 )
 async def evolution_webhook(request: Request, background_tasks: BackgroundTasks) -> dict:
     """Handle incoming requests from Evolution API."""
     payload = await request.json()
-    
-    # We only care about MESSAGES_UPSERT events
-    # Evolution may send "messages.upsert" or "MESSAGES_UPSERT" depending on config/version.
+
     event = str(payload.get("event") or "")
     normalized_event = event.lower().replace("_", ".")
     if normalized_event != "messages.upsert":
-        # Evolution API sends connection updates too
         return {"status": "ignored", "reason": f"event {event}"}
 
     data = payload.get("data", {})
     key = data.get("key", {})
-
-    # Ignore our own messages
-    if key.get("fromMe"):
-        return {"status": "ignored", "reason": "from_me"}
-
-    # Ignore group messages
     remote_jid = key.get("remoteJid", "")
     if "@g.us" in remote_jid:
         return {"status": "ignored", "reason": "group_message"}
 
-    # Clean phone number
     phone = remote_jid.replace("@s.whatsapp.net", "").replace("@c.us", "")
-
-    # Extract text from various Evolution API message formats
-    msg = data.get("message", {})
-    text = (
-        msg.get("conversation")
-        or msg.get("extendedTextMessage", {}).get("text")
-        or msg.get("imageMessage", {}).get("caption")
-        or ""
-    ).strip()
-
+    text = _extract_message_text(data)
     if not text:
         return {"status": "ignored", "reason": "no_text"}
 
+    from_me = bool(key.get("fromMe"))
     message_id = key.get("id", "")
 
-    # Dispatch to background task to free the HTTP request immediately
-    background_tasks.add_task(process_whatsapp_message, phone, text, message_id)
+    # Operator reply path: when a human handoff session exists for this number,
+    # store message for UI polling.
+    session = session_store.get_session_by_operator_number(phone)
+    if session and session.active:
+        if not from_me:
+            session_store.add_message(session.session_id, sender="agent", content=text)
+            return {"status": "ok", "role": "operator", "session_id": session.session_id}
 
+        # Compatibility for self-chat operation (operator == bot account).
+        if not _is_operator_system_message(text):
+            session_store.add_message(session.session_id, sender="agent", content=text)
+            return {"status": "ok", "role": "operator_self", "session_id": session.session_id}
+
+        return {"status": "ignored", "reason": "operator_system_forward"}
+
+    if from_me:
+        return {"status": "ignored", "reason": "from_me"}
+
+    background_tasks.add_task(process_whatsapp_message, phone, text, message_id)
     return {"status": "ok", "task": "queued"}
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import WebGLBackground from './components/WebGLBackground';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -57,6 +57,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState(null);
+  const pollCursorRef = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -90,32 +91,35 @@ function App() {
   }, [isAuthenticated, userProfile]);
 
   useEffect(() => {
+    pollCursorRef.current = 0;
+  }, [activeSessionId]);
+
+  useEffect(() => {
     let pollingInterval;
     if (activeSessionId) {
       pollingInterval = setInterval(async () => {
         try {
-          const response = await fetch(apiUrl(`/v1/messages/${activeSessionId}`));
+          const since = pollCursorRef.current;
+          const response = await fetch(apiUrl(`/v1/messages/${activeSessionId}?since=${since}`));
           if (response.ok) {
             const data = await response.json();
             if (data.messages && data.messages.length > 0) {
-              setMessages((prev) => {
-                const newMessages = [...prev];
-                let added = false;
-                for (const message of data.messages) {
-                  const exists = newMessages.some((item) => item.id === message.id);
-                  if (!exists) {
-                    newMessages.push({
-                      id: message.id,
-                      sender: message.sender === 'user' ? 'user' : 'bot',
-                      text: message.content,
-                      agent: message.sender === 'human' ? 'human' : 'bot',
-                      timestamp: message.timestamp,
-                    });
-                    added = true;
-                  }
-                }
-                return added ? newMessages : prev;
-              });
+              const maxIndex = Math.max(...data.messages.map((message) => message.index ?? since));
+              pollCursorRef.current = Math.max(pollCursorRef.current, maxIndex + 1);
+
+              const operatorMessages = data.messages.filter((message) => message.sender === 'agent');
+              if (operatorMessages.length > 0) {
+                setMessages((prev) => [
+                  ...prev,
+                  ...operatorMessages.map((message) => ({
+                    id: `session-${activeSessionId}-${message.index}`,
+                    sender: 'bot',
+                    text: message.content,
+                    agent: 'human',
+                    timestamp: message.timestamp,
+                  })),
+                ]);
+              }
             }
           } else if (response.status === 404) {
             setActiveSessionId(null);
