@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from langchain_core.messages import AIMessage, SystemMessage
 
@@ -16,6 +17,25 @@ from src.agents.state import AgentState
 from src.infrastructure.llm.model_factory import get_router_llm
 
 logger = logging.getLogger(__name__)
+
+
+_SUPPORT_OPERATIONAL_PATTERNS = (
+    r"\bstatus\b.{0,25}\bservic",
+    r"\bservice status\b",
+    r"\b(outage|downtime|instab|indispon|fora do ar|is down)\b",
+    r"\b(infinitepay|service|servico|servicos)\b.{0,20}\bdown\b",
+    r"\binstabilidade\b",
+    r"\bservic[oos].{0,25}\b(indisponivel|instavel|fora do ar)\b",
+    r"\bpix\b.{0,20}\b(instabilidade|fora do ar|indisponivel)\b",
+)
+
+
+def _is_operational_support_query(message: str) -> bool:
+    """Detect service-status and outage questions that must route to support."""
+    if not message:
+        return False
+    text = message.lower()
+    return any(re.search(pattern, text) for pattern in _SUPPORT_OPERATIONAL_PATTERNS)
 
 
 async def router_node(state: AgentState) -> dict:
@@ -27,10 +47,35 @@ async def router_node(state: AgentState) -> dict:
     Returns:
         State update with intent, language, and agent_route.
     """
-    llm = get_router_llm()
-
-    # Get the last user message
     last_message = state["messages"][-1]
+    raw_text = getattr(last_message, "content", "") or ""
+
+    # Deterministic safety net: operational/status outage queries always go to support.
+    if _is_operational_support_query(raw_text):
+        logger.info(
+            "Router deterministic override intent=support route=support for message=%s",
+            raw_text[:120],
+        )
+        return {
+            "intent": "support",
+            "language": "pt-BR",
+            "agent_route": "support",
+            "messages": [
+                AIMessage(
+                    content=(
+                        "[Router] Intent: support | Language: pt-BR | "
+                        "Route: support (deterministic operational rule)"
+                    ),
+                    name="router",
+                )
+            ],
+            "metadata": {
+                **state.get("metadata", {}),
+                "router_reasoning": "Deterministic rule for service status/outage query",
+            },
+        }
+
+    llm = get_router_llm()
 
     response = await llm.ainvoke([
         SystemMessage(content=ROUTER_SYSTEM_PROMPT),

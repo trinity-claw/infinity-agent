@@ -1,7 +1,7 @@
 [project]
 name = "infinity-agent"
 version = "1.0.0"
-description = "Multi-agent AI swarm for InfinitePay customer service — CloudWalk Coding Challenge"
+description = "Multi-agent AI swarm for InfinitePay customer service - CloudWalk Coding Challenge"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -70,3 +70,4 @@ packages = ["src"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+

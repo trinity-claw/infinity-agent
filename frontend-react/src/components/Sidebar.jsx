@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import agentLogo from '../../infinity-agent-logo.png';
 
-const getFallbackUserId = () => `client_${Math.floor(Math.random() * 10000)}`;
+const getFallbackUserId = () => 'client789';
 
 const QUICK_SUGGESTIONS = [
   { label: 'Taxas da maquininha', message: 'Quais sao as taxas da Maquininha Smart?' },
@@ -10,7 +10,6 @@ const QUICK_SUGGESTIONS = [
   { label: 'Emprestimo empresarial', message: 'Quero fazer um emprestimo' },
   { label: 'Pix gratuito?', message: 'O Pix e gratuito na InfinitePay?' },
   { label: 'Falar com atendente', message: 'Quero falar com um atendente humano' },
-  { label: 'Status dos servicos', message: 'Qual o status atual dos servicos da InfinitePay?' },
 ];
 
 const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
@@ -74,7 +73,7 @@ const Sidebar = ({ onClearChat, onQuickSuggestion, userProfile, onLogout }) => {
             id="userIdInput"
             value={userId}
             onChange={handleUserIdChange}
-            placeholder="Ex: 5511999999999"
+            placeholder="Ex: client789"
           />
         </div>
       </div>

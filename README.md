@@ -1,97 +1,122 @@
 ﻿# Infinity Agent - InfinitePay AI Swarm
 
-Multi-agent AI system for InfinitePay support, built for the CloudWalk coding challenge.
+Production-oriented multi-agent system built for the CloudWalk coding challenge.
 
-## Overview
+It serves web chat and WhatsApp handoff use cases with:
+- LangGraph-based agent orchestration
+- RAG over InfinitePay content
+- Guardrails (input/output)
+- Human escalation workflow
+- Docker-first deployment
 
-Infinity Agent processes chat requests from web and WhatsApp, routes them through specialized agents, and returns grounded responses with guardrails.
+## Challenge Requirement Mapping
 
-Core flow:
+| Challenge Requirement | Status | Where Implemented |
+|---|---|---|
+| At least 3 distinct agents | Met (4 agents) | `src/agents/nodes/` |
+| Router as primary entrypoint | Met | `src/agents/nodes/router_node.py`, `src/agents/graph.py` |
+| Knowledge agent with RAG + web search | Met | `src/agents/nodes/knowledge_node.py`, `src/agents/tools/knowledge_tools.py`, `src/rag/` |
+| Support agent with at least 2 tools | Met (6 tools) | `src/agents/tools/support_tools.py` |
+| HTTP endpoint with JSON payload | Met | `src/api/v1/routes/chat.py`, `src/api/v1/schemas.py` |
+| Dockerization | Met | `Dockerfile`, `docker-compose.yml` |
+| Testing strategy and automated tests | Met | `tests/`, `promptfooconfig.yaml` |
+| Bonus: fourth agent | Met | `src/agents/nodes/sentiment_node.py` |
+| Bonus: guardrails | Met | `src/agents/guardrails/` |
+| Bonus: human redirect | Met | `src/api/v1/routes/escalation.py`, `src/api/v1/routes/webhook.py` |
 
-1. `POST /v1/chat` receives user message
-2. Input guard validates unsafe requests
-3. Router agent classifies intent and language
-4. Request is dispatched to a specialized agent
-5. Output guard masks sensitive data before response
+## Architecture at a Glance
 
-## Agent Swarm
+Message flow:
+1. `POST /v1/chat` receives message and user context.
+2. Input guard blocks prompt injection / unsafe content.
+3. Router classifies intent: `knowledge`, `support`, `escalation`.
+4. Specialized agent handles request.
+5. Personality/finalization layer (implemented by agent prompt style + output guard) normalizes and sanitizes final text.
+6. Response is returned to UI.
 
-- Router Agent (`src/agents/nodes/router_node.py`)
-  - Classifies intent (`knowledge`, `support`, `escalation`)
-  - Selects next node in LangGraph
-- Knowledge Agent (`src/agents/nodes/knowledge_node.py`)
-  - Uses RAG over InfinitePay content
-  - Uses web search for general queries
-- Support Agent (`src/agents/nodes/support_node.py`)
-  - Uses customer tools (lookup user, transactions, tickets, status)
-- Sentiment Agent (`src/agents/nodes/sentiment_node.py`) [bonus]
-  - Detects urgency and escalates to human support when needed
+Graph orchestration: `src/agents/graph.py`
 
-Orchestration: `src/agents/graph.py` (LangGraph StateGraph).
+### Agents
 
-## Tech Stack
+- Router Agent
+  - Intent and language classification.
+  - Deterministic safety override: service-status/outage queries route to `support`.
+- Knowledge Agent
+  - Internal RAG retrieval (`search_knowledge_base`).
+  - External search for general questions (`search_web`).
+  - Safe overlap fallback for misrouted support-style operational questions.
+- Support Agent
+  - Personalized support with account/tool access.
+- Sentiment Agent
+  - Detects frustration/urgency and triggers human handoff path.
 
-- Backend: FastAPI + Uvicorn
-- Orchestration: LangGraph + SQLite Checkpointer
-- LLM gateway: OpenRouter
-- Vector DB: ChromaDB
-- Frontend: React + Vite + WebGL shader background
-- Auth: Google OAuth (frontend allowlist)
-- WhatsApp bridge: Evolution API
+Diagram alignment note:
+- Router -> specialized agents -> final response layer is explicitly implemented.
+- "Tools" nodes in the challenge diagram are represented by LangChain tools bound to each specialized agent.
+- The optional custom agent requirement is covered by the Sentiment Agent.
 
-## Frontend (React)
+## Public API
 
-Active frontend lives in `frontend-react/`.
+### `POST /v1/chat`
 
-Dev:
+Request:
 
-```bash
-cd frontend-react
-npm install
-npm run dev
+```json
+{
+  "message": "Quais sao as taxas da Maquininha Smart?",
+  "user_id": "client_123",
+  "user_name": "User Name",
+  "user_email": "user@example.com",
+  "session_id": null
+}
 ```
 
-Build:
+Response:
 
-```bash
-cd frontend-react
-npm run build
+```json
+{
+  "response": "...",
+  "agent_used": "knowledge",
+  "intent": "knowledge",
+  "language": "pt-BR",
+  "metadata": {
+    "escalated": false,
+    "guardrail_blocked": false
+  },
+  "timestamp": "2026-04-06T00:00:00Z"
+}
 ```
 
-Frontend env (`frontend-react/.env`):
+### Other routes
+- `GET /v1/health`
+- `POST /v1/escalation/session/start`
+- `GET /v1/escalation/session/{session_id}`
+- `POST /v1/webhook` (Evolution API inbound)
 
-```env
-VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
-VITE_ALLOWED_EMAILS=you@example.com,another@example.com
-VITE_API_BASE_URL=http://localhost:8002
-```
+OpenAPI docs: `/docs`
 
-## Local Backend Setup
+## Local Development
+
+### 1) Backend
 
 Prerequisites:
-
 - Python 3.12+
 - `uv`
 
-Install:
+Setup:
 
 ```bash
 uv venv
 # Linux/macOS: source .venv/bin/activate
-# Windows: .venv\\Scripts\\activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 uv pip install -e .
-```
-
-Configure env:
-
-```bash
 cp .env.example .env
 ```
 
-Required minimum:
+Minimum required variable:
 
 ```env
-OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxx
+OPENROUTER_API_KEY=sk-or-v1-...
 ```
 
 Ingest knowledge base:
@@ -103,59 +128,144 @@ python -m scripts.ingest
 Run API:
 
 ```bash
-uv run uvicorn src.main:app --reload --port 8002
+uv run uvicorn src.main:app --reload --port 8000
 ```
+
+### 2) Frontend
+
+```bash
+cd frontend-react
+npm install
+npm run dev
+```
+
+Frontend env (`frontend-react/.env`):
+
+```env
+VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+VITE_ALLOWED_EMAILS=you@example.com,another@example.com
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Evaluator tip:
+- Sidebar defaults to `user_id=client789` so support flows work immediately with seeded mock data.
+- Full mock account list: `docs/MOCK_DATA.md`.
 
 ## Docker
 
 ```bash
 cp .env.example .env
-docker-compose up --build
+docker compose up -d --build
 ```
 
-## API
+- API: `http://localhost:8000`
+- Health: `http://localhost:8000/v1/health`
 
-`POST /v1/chat`
+If this is your first run and the knowledge base is empty, ingest content once:
 
-Request:
-
-```json
-{
-  "message": "Quais sao os produtos da InfinitePay?",
-  "user_id": "client789",
-  "user_name": "Nome Exemplo",
-  "user_email": "user@example.com"
-}
+```bash
+docker compose exec infinity-agent python -m scripts.ingest
 ```
 
-`GET /v1/health`
+### Evaluator Quick Start (5-Minute Path)
 
-Interactive docs: `http://localhost:8002/docs`
+1. Configure API key:
+```bash
+cp .env.example .env
+# edit .env and set OPENROUTER_API_KEY
+```
+2. Start services:
+```bash
+docker compose up -d --build
+```
+3. Run smoke validation (routes + guardrails):
+```bash
+python scripts/evaluator_smoke.py --base-url http://localhost:8000 --user-id client789
+```
+Or run inside the Docker container (no local Python setup needed):
+```bash
+docker compose exec infinity-agent python scripts/evaluator_smoke.py --base-url http://localhost:8000 --user-id client789
+```
+4. Open API docs:
+```text
+http://localhost:8000/docs
+```
+5. (Optional) Open frontend (served by FastAPI static mount):
+```text
+http://localhost:8000
+```
 
-## Tests
+## RAG Pipeline
 
-Backend:
+- Source ingestion defined in `src/rag/scraper.py`
+- Chunking strategy in `src/rag/chunker.py`
+- Embedding + persistence in `src/rag/ingest_pipeline.py`
+- Retrieval path used by knowledge tools in `src/agents/tools/knowledge_tools.py`
+
+Runtime behavior:
+- Product/service questions -> vector retrieval
+- General world questions -> web search
+
+## How LLM Tools Were Used in This Case
+
+- LangGraph orchestrates the swarm state machine (`src/agents/graph.py`).
+- Router uses structured JSON classification prompt for intent/language (`router_prompt.py`).
+- Knowledge agent uses tool-calling:
+  - `search_knowledge_base` for RAG-grounded answers
+  - `search_web` for general-purpose questions
+- Support agent uses tool-calling for account lookup, transactions, ticketing, balance, and service status.
+- Sentiment agent uses tools for urgency detection and human escalation.
+- Prompt-level guardrails + output sanitization control unsafe input and sensitive output patterns.
+
+## Prompt Curation Policy (Quick Suggestions)
+
+Quick suggestions must:
+- be answerable with high confidence by implemented agents/tools
+- map clearly to one expected route (`knowledge`, `support`, or `escalation`)
+- avoid ambiguous operational wording unless route is explicitly covered
+
+Current curated suggestions are maintained in:
+- `frontend-react/src/components/Sidebar.jsx`
+
+## Testing Strategy
+
+### Automated
 
 ```bash
 uv run pytest -q
 ```
 
-Frontend build check:
+Prompt evaluation:
 
 ```bash
-cd frontend-react
-npm run build
+npx promptfoo@latest eval
 ```
 
-## Deploy Guides
+Evaluator smoke test:
 
-- General VPS + Docker + Evolution: `docs/DEPLOYMENT.md`
-- Recommended split deploy (Vercel + Railway + Evolution staging):
-  - `docs/DEPLOY_VERCEL_RAILWAY_EVOLUTION.md`
+```bash
+python scripts/evaluator_smoke.py --base-url http://localhost:8000 --user-id client789
+# or:
+docker compose exec infinity-agent python scripts/evaluator_smoke.py --base-url http://localhost:8000 --user-id client789
+```
 
-## Security and Ops Notes
+### Coverage intent
+- Unit tests for guards, container lifecycle, sentiment tools, deterministic routing and overlap fallback.
+- Integration tests for API behavior.
+- Prompt-level regression scenarios in promptfoo.
 
-- Do not commit real `.env` files
-- Keep `AUTHENTICATION_API_KEY`, `OPENROUTER_API_KEY`, and OAuth secrets only in platform env vars
-- Configure `CORS_ALLOW_ORIGINS` in production to explicit domains
-- Keep checkpointer SQLite persistence mounted on persistent storage in production
+## WhatsApp Handoff (Evolution API)
+
+This repo supports human handoff through Evolution API webhook integration.
+Main integration points:
+- `src/api/v1/routes/webhook.py`
+- `src/api/v1/routes/escalation.py`
+- `src/infrastructure/whatsapp/`
+
+## Documentation Index
+
+See `docs/README.md` for the complete documentation map.
+
+## Legacy Files
+
+Older planning artifacts were archived to `docs/archive/` to keep the evaluator path clean while preserving project history.

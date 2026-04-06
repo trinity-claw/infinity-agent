@@ -1,8 +1,9 @@
 """In-memory User Repository implementation.
 
-Provides a simulated database of InfinitePay customers.
-Pre-seeded with realistic fake data for the coding challenge demo.
+Provides a simulated customer database for challenge/demo scenarios.
 """
+
+from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
@@ -28,7 +29,7 @@ def _seed_users() -> dict[str, User]:
         ),
         "client001": User(
             user_id="client001",
-            name="João Pedro Oliveira",
+            name="Joao Pedro Oliveira",
             email="joao.oliveira@empresa.com",
             phone="(21) 99876-5432",
             document="12.345.678/0001-90",
@@ -60,9 +61,9 @@ def _seed_users() -> dict[str, User]:
             account_type="PF",
             plan="InfiniteTap",
             balance=890.25,
-            is_active=False,  # Account with issues
+            is_active=False,
             created_at=now - timedelta(days=90),
-            metadata={"blocked_reason": "Documentação pendente"},
+            metadata={"blocked_reason": "Documentacao pendente"},
         ),
         "client004": User(
             user_id="client004",
@@ -84,11 +85,11 @@ def _seed_transactions() -> dict[str, list[Transaction]]:
     now = datetime.now(timezone.utc)
     return {
         "client789": [
-            Transaction("tx001", "client789", 150.00, "credit", "Venda cartão crédito 1x", "completed", now - timedelta(hours=2)),
-            Transaction("tx002", "client789", -50.00, "pix", "Transferência Pix", "completed", now - timedelta(hours=5)),
-            Transaction("tx003", "client789", 320.00, "credit", "Venda cartão crédito 3x", "completed", now - timedelta(days=1)),
-            Transaction("tx004", "client789", 75.00, "debit", "Venda cartão débito", "completed", now - timedelta(days=1)),
-            Transaction("tx005", "client789", -200.00, "transfer", "Transferência bancária", "completed", now - timedelta(days=2)),
+            Transaction("tx001", "client789", 150.00, "credit", "Venda cartao credito 1x", "completed", now - timedelta(hours=2)),
+            Transaction("tx002", "client789", -50.00, "pix", "Transferencia Pix", "completed", now - timedelta(hours=5)),
+            Transaction("tx003", "client789", 320.00, "credit", "Venda cartao credito 3x", "completed", now - timedelta(days=1)),
+            Transaction("tx004", "client789", 75.00, "debit", "Venda cartao debito", "completed", now - timedelta(days=1)),
+            Transaction("tx005", "client789", -200.00, "transfer", "Transferencia bancaria", "completed", now - timedelta(days=2)),
         ],
         "client001": [
             Transaction("tx010", "client001", 1_200.00, "credit", "Venda Maquininha 12x", "completed", now - timedelta(hours=1)),
@@ -99,11 +100,11 @@ def _seed_transactions() -> dict[str, list[Transaction]]:
         "client002": [
             Transaction("tx020", "client002", 5_600.00, "credit", "Venda Link Pagamento 12x", "completed", now - timedelta(hours=4)),
             Transaction("tx021", "client002", 2_300.00, "pix", "Recebimento Pix cliente", "completed", now - timedelta(days=1)),
-            Transaction("tx022", "client002", -8_000.00, "transfer", "Pagamento salários", "pending", now - timedelta(hours=1)),
+            Transaction("tx022", "client002", -8_000.00, "transfer", "Pagamento salarios", "pending", now - timedelta(hours=1)),
         ],
         "client003": [
-            Transaction("tx030", "client003", 95.00, "debit", "Venda débito", "completed", now - timedelta(days=5)),
-            Transaction("tx031", "client003", -100.00, "pix", "Transferência Pix", "failed", now - timedelta(days=1)),
+            Transaction("tx030", "client003", 95.00, "debit", "Venda debito", "completed", now - timedelta(days=5)),
+            Transaction("tx031", "client003", -100.00, "pix", "Transferencia Pix", "failed", now - timedelta(days=1)),
         ],
         "client004": [
             Transaction("tx040", "client004", 750.00, "credit", "Venda Link Pagamento 3x", "completed", now - timedelta(hours=6)),

@@ -7,6 +7,7 @@ Uses tool-calling with LangGraph's prebuilt ToolNode pattern.
 from __future__ import annotations
 
 import logging
+import re
 
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
@@ -18,6 +19,43 @@ from src.domain.ports.web_searcher import WebSearcher
 from src.infrastructure.llm.model_factory import get_knowledge_llm
 
 logger = logging.getLogger(__name__)
+
+
+_SUPPORT_OVERLAP_PATTERNS = (
+    r"\bstatus\b.{0,25}\bservic",
+    r"\bservice status\b",
+    r"\b(outage|downtime|instab|indispon|fora do ar|is down)\b",
+    r"\b(infinitepay|service|servico|servicos)\b.{0,20}\bdown\b",
+    r"\bnao consigo\b.{0,30}\b(acessar|entrar|transferir|pagar)\b",
+    r"\bi can't\b.{0,30}\b(sign in|login|transfer|pay)\b",
+)
+
+
+def _is_support_overlap_query(message: str) -> bool:
+    """Detect support-style operational issues that were misrouted to knowledge."""
+    if not message:
+        return False
+    text = message.lower()
+    return any(re.search(pattern, text) for pattern in _SUPPORT_OVERLAP_PATTERNS)
+
+
+def _build_support_overlap_message(message: str) -> str:
+    """Build a safer response for operational/support questions."""
+    lower = (message or "").lower()
+    if any(
+        token in lower
+        for token in ("is down", "service status", "outage", "downtime", "can't", "cannot")
+    ):
+        return (
+            "This request looks like an operational support issue, not a knowledge-base topic. "
+            "Please continue through support/human handoff so we can check real-time "
+            "service diagnostics."
+        )
+    return (
+        "Essa solicitacao parece um problema operacional de suporte, e nao uma duvida de base de "
+        "conhecimento. Por favor, siga pelo fluxo de suporte/atendente humano para verificarmos "
+        "diagnostico em tempo real."
+    )
 
 
 def create_knowledge_node(
@@ -38,10 +76,34 @@ def create_knowledge_node(
     async def knowledge_node(state: AgentState) -> dict:
         """Process knowledge/general questions using RAG or web search.
 
-        The LLM decides which tool to use based on the question type:
-        - InfinitePay questions → search_knowledge_base
-        - General questions → search_web
+        The LLM decides which tool to use based on question type:
+        - InfinitePay questions -> search_knowledge_base
+        - General questions -> search_web
         """
+        user_message = ""
+        for msg in reversed(state["messages"]):
+            if getattr(msg, "type", "") == "human":
+                user_message = getattr(msg, "content", "") or ""
+                break
+
+        if _is_support_overlap_query(user_message):
+            logger.info(
+                "Knowledge overlap fallback triggered for support-style message=%s",
+                user_message[:120],
+            )
+            return {
+                "messages": [
+                    AIMessage(
+                        content=_build_support_overlap_message(user_message),
+                        name="knowledge",
+                    )
+                ],
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "knowledge_overlap_fallback": True,
+                },
+            }
+
         llm = get_knowledge_llm().bind_tools(tools)
         authenticated_user = state.get("metadata", {}).get("authenticated_user", {})
         auth_name = authenticated_user.get("name", "")
@@ -53,7 +115,11 @@ def create_knowledge_node(
         if auth_email:
             profile_lines.append(f"- Authenticated email: {auth_email}")
 
-        profile_block = "\n".join(profile_lines) if profile_lines else "- No authenticated profile provided."
+        profile_block = (
+            "\n".join(profile_lines)
+            if profile_lines
+            else "- No authenticated profile provided."
+        )
         context_prompt = (
             f"{KNOWLEDGE_SYSTEM_PROMPT}\n\n"
             f"## Session Context\n"
@@ -62,10 +128,10 @@ def create_knowledge_node(
         )
         messages = [SystemMessage(content=context_prompt)] + list(state["messages"])
 
-        # First call: LLM decides which tool(s) to use
+        # First call: LLM decides which tool(s) to use.
         response = await llm.ainvoke(messages)
 
-        # If tool calls are present, execute them
+        # If tool calls are present, execute them.
         if response.tool_calls:
             tool_map = {t.name: t for t in tools}
             tool_results = []
@@ -82,7 +148,7 @@ def create_knowledge_node(
                         )
                     )
 
-            # Second call: LLM synthesizes the final response using tool results
+            # Second call: LLM synthesizes final response using tool results.
             messages_with_tools = messages + [response] + tool_results
             final_response = await llm.ainvoke(messages_with_tools)
 
@@ -95,7 +161,7 @@ def create_knowledge_node(
                 ],
             }
 
-        # No tool calls — LLM answered directly
+        # No tool calls - LLM answered directly.
         return {
             "messages": [
                 AIMessage(content=response.content, name="knowledge")

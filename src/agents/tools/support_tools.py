@@ -21,26 +21,11 @@ def create_support_tools(
     user_repo: UserRepository,
     ticket_repo: TicketRepository,
 ) -> list:
-    """Factory that creates support tools with injected repositories.
-
-    Args:
-        user_repo: Repository for user data access.
-        ticket_repo: Repository for support ticket operations.
-
-    Returns:
-        List of LangChain tools bound to the provided repositories.
-    """
+    """Factory that creates support tools with injected repositories."""
 
     @tool
     async def lookup_user(user_id: str) -> str:
-        """Look up a customer's account information.
-
-        Use this tool FIRST when handling any support request to get
-        the customer's profile, plan, and account status.
-
-        Args:
-            user_id: The customer's user ID.
-        """
+        """Look up a customer's account information."""
         user = await user_repo.find_by_id(user_id)
         if not user:
             return f"No customer found with ID: {user_id}. This user may not have an account."
@@ -48,37 +33,21 @@ def create_support_tools(
 
     @tool
     async def get_transaction_history(user_id: str) -> str:
-        """Get the customer's recent transaction history.
-
-        Use this to investigate missing money, failed transactions,
-        or to verify payment status.
-
-        Args:
-            user_id: The customer's user ID.
-        """
+        """Get the customer's recent transaction history."""
         transactions = await user_repo.get_transaction_history(user_id, limit=10)
         if not transactions:
             return f"No transactions found for user {user_id}."
 
         lines = [f"Recent transactions for {user_id}:"]
         for tx in transactions:
-            lines.append(f"  • {tx.to_summary()}")
+            lines.append(f"  - {tx.to_summary()}")
         return "\n".join(lines)
 
     @tool
     async def create_support_ticket(
         user_id: str, issue: str, priority: str = "medium"
     ) -> str:
-        """Create a support ticket for issues that need follow-up.
-
-        Use this when the issue cannot be resolved immediately and
-        needs to be tracked by the support team.
-
-        Args:
-            user_id: The customer's user ID.
-            issue: Description of the issue.
-            priority: Ticket priority — 'low', 'medium', 'high', or 'urgent'.
-        """
+        """Create a support ticket for issues requiring follow-up."""
         try:
             ticket_priority = TicketPriority(priority.lower())
         except ValueError:
@@ -90,61 +59,45 @@ def create_support_tools(
             priority=ticket_priority,
         )
         return (
-            f"Support ticket created successfully!\n{ticket.to_summary()}\n"
+            f"Support ticket created successfully.\n{ticket.to_summary()}\n"
             f"Our team will review this within 24 hours."
         )
 
     @tool
     async def check_service_status() -> str:
-        """Check the operational status of InfinitePay services.
-
-        Use this when a customer reports issues that might be caused
-        by a service outage or degradation.
-        """
-        # Simulated service status
+        """Check the operational status of InfinitePay services."""
         services = {
             "Maquininha Smart": ServiceStatus.OPERATIONAL,
             "InfiniteTap": ServiceStatus.OPERATIONAL,
             "Pix": ServiceStatus.OPERATIONAL,
             "Link de Pagamento": ServiceStatus.OPERATIONAL,
             "Conta Digital": ServiceStatus.OPERATIONAL,
-            "Cartão Virtual": ServiceStatus.OPERATIONAL,
-            "Transferências": ServiceStatus.OPERATIONAL,
+            "Cartao Virtual": ServiceStatus.OPERATIONAL,
+            "Transferencias": ServiceStatus.OPERATIONAL,
         }
 
         lines = ["InfinitePay Service Status:"]
         for service, status in services.items():
-            emoji = "✅" if status == ServiceStatus.OPERATIONAL else "⚠️"
-            lines.append(f"  {emoji} {service}: {status.value}")
+            icon = "[OK]" if status == ServiceStatus.OPERATIONAL else "[WARN]"
+            lines.append(f"  {icon} {service}: {status.value}")
         return "\n".join(lines)
 
     @tool
     async def reset_password_request(user_id: str) -> str:
-        """Initiate a password reset for the customer's account.
-
-        Use this when the customer cannot sign in to their account
-        and needs to reset their password.
-
-        Args:
-            user_id: The customer's user ID.
-        """
+        """Initiate a password reset for the customer account."""
         user = await user_repo.find_by_id(user_id)
         if not user:
             return f"Cannot initiate password reset: user {user_id} not found."
 
         return (
             f"Password reset initiated for {user.name}.\n"
-            f"A reset link has been sent to {user.email}.\n"
-            f"The link will expire in 30 minutes."
+            f"A reset link was sent to {user.email}.\n"
+            f"The link expires in 30 minutes."
         )
 
     @tool
     async def get_account_balance(user_id: str) -> str:
-        """Check the customer's account balance.
-
-        Args:
-            user_id: The customer's user ID.
-        """
+        """Check the customer's account balance."""
         balance = await user_repo.get_account_balance(user_id)
         if balance is None:
             return f"Could not retrieve balance for user {user_id}."

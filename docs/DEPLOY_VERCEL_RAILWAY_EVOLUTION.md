@@ -1,39 +1,28 @@
-# Deploy Completo (Vercel + Railway + Evolution API)
+﻿# Deployment Guide (Vercel + Railway + Evolution API)
 
-Este guia cobre o fluxo recomendado para producao:
+Recommended production split:
+- Frontend React on Vercel
+- Backend FastAPI on Railway
+- Evolution API in staging/ops environment
 
-- Frontend React no **Vercel**
-- Backend FastAPI no **Railway** (com persistencia em disco)
-- Evolution API em **staging** (para handoff humano via WhatsApp)
+## 1) Target Topology
 
-## 1) Arquitetura final
+- `frontend-react` served by Vercel
+- backend API served by Railway
+- frontend calls backend via `VITE_API_BASE_URL`
+- Evolution API sends inbound WhatsApp events to backend `/v1/webhook`
 
-- `frontend-react` publica no Vercel
-- API roda separada no Railway
-- Frontend chama backend via `VITE_API_BASE_URL`
-- Backend persiste:
-  - Chroma em `/app/data/chroma_db`
-  - SQLite em `/app/data/langgraph.sqlite`
+## 2) Backend on Railway
 
-## 2) Pre-requisitos
+### 2.1 Create Service
 
-- Conta Vercel
-- Conta Railway
-- Conta Google Cloud (OAuth Web Client)
-- Chave OpenRouter ativa
-- (Opcional staging) Evolution API disponivel
+- New Railway project
+- Connect repository
+- Build from root `Dockerfile`
 
-## 3) Backend no Railway
+### 2.2 Backend Environment Variables
 
-### 3.1 Criar servico
-
-1. Criar novo projeto no Railway
-2. Conectar este repositorio
-3. Build usando `Dockerfile` da raiz
-
-### 3.2 Variaveis de ambiente (Backend)
-
-Defina no Railway:
+Set at minimum:
 
 ```env
 APP_ENV=production
@@ -50,12 +39,10 @@ SENTIMENT_MODEL=openai/gpt-4o-mini
 GUARDRAIL_MODEL=openai/gpt-4o-mini
 
 CHROMA_PERSIST_DIR=/app/data/chroma_db
-SQLITE_DB_PATH=/app/data/langgraph.sqlite
+SQLITE_DB_PATH=/app/data/sqlite_db/langgraph.sqlite
 
-# Coloque aqui os dominios reais do frontend (CSV)
-CORS_ALLOW_ORIGINS=https://seu-app.vercel.app,https://seu-dominio.com
+CORS_ALLOW_ORIGINS=https://YOUR_APP.vercel.app,https://YOUR_DOMAIN
 
-# Produção inicial recomendada: desligado
 WHATSAPP_ENABLED=false
 WHATSAPP_API_URL=
 WHATSAPP_API_TOKEN=
@@ -63,121 +50,88 @@ WHATSAPP_INSTANCE=main
 WHATSAPP_OPERATOR_NUMBER=
 ```
 
-### 3.3 Persistencia
+Attach persistent volume to `/app/data`.
 
-No Railway, anexe volume/disco persistente para `/app/data`.
+### 2.3 Validate Backend
 
-Sem isso, Chroma/SQLite perdem estado a cada restart.
+- `GET /v1/health` returns `healthy`
+- `POST /v1/chat` returns valid JSON payload
 
-### 3.4 Validacao backend
+## 3) Frontend on Vercel
 
-- `GET /v1/health` => `200`
-- `POST /v1/chat` => `200`
+### 3.1 Project Setup
 
-## 4) Frontend no Vercel
+- Import repository
+- Root Directory: `frontend-react`
+- Build command: `npm run build`
+- Output directory: `dist`
 
-### 4.1 Configurar projeto
-
-1. Importar repositorio no Vercel
-2. Root directory: `frontend-react`
-3. Build: `npm run build`
-4. Output: `dist`
-
-### 4.2 Variaveis de ambiente (Frontend)
+### 3.2 Frontend Environment Variables
 
 ```env
 VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 VITE_ALLOWED_EMAILS=you@example.com,another@example.com
-VITE_API_BASE_URL=https://seu-backend.railway.app
+VITE_API_BASE_URL=https://YOUR_BACKEND.railway.app
 ```
 
-### 4.3 Validacao frontend
+### 3.3 Validate Frontend
 
-- Login Google abre sem erro de origem
-- Chat envia pergunta e recebe resposta real do backend
+- Google login renders and authenticates
+- Chat round trip works against Railway backend
 
-## 5) Google OAuth (evitar origin_mismatch)
+## 4) Google OAuth Origin Configuration
 
-No Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client ID (Web):
+In Google Cloud Console -> OAuth 2.0 Client (Web), configure Authorized JavaScript Origins:
 
-Em **Authorized JavaScript origins**, adicione:
+- `http://localhost:5173`
+- `http://localhost:8000`
+- `https://YOUR_APP.vercel.app`
+- `https://YOUR_DOMAIN` (if custom domain)
 
-- `http://localhost:5173` (dev Vite)
-- `http://localhost:8002` (quando servir frontend/backend local)
-- `https://seu-app.vercel.app`
-- `https://seu-dominio.com` (se houver)
+Missing origins produce `origin_mismatch`.
 
-Se faltar qualquer origem ativa, o Google retornara `Erro 400: origin_mismatch`.
+## 5) Evolution API (Staging / Ops)
 
-## 6) Evolution API (staging)
-
-Recomendacao: manter Evolution ligado em **staging** primeiro.
-
-### 6.1 Subir Evolution
-
-Pode ser em Railway, VPS ou container separado.
-Garanta:
-
-- URL publica acessivel
-- Header `apikey` configurado
-
-### 6.2 Backend (staging) - variaveis WhatsApp
+Set backend WhatsApp variables:
 
 ```env
 WHATSAPP_ENABLED=true
-WHATSAPP_API_URL=https://evolution-staging.seu-dominio.com
-WHATSAPP_API_TOKEN=sua_api_key_forte
+WHATSAPP_API_URL=https://YOUR_EVOLUTION_HOST
+WHATSAPP_API_TOKEN=YOUR_EVOLUTION_API_KEY
 WHATSAPP_INSTANCE=infinity_bot
 WHATSAPP_OPERATOR_NUMBER=5511999999999
 ```
 
-### 6.3 Criar instancia na Evolution
+Create instance:
 
 ```bash
-curl --request POST \
-  --url https://evolution-staging.seu-dominio.com/instance/create \
-  --header 'apikey: sua_api_key_forte' \
-  --header 'content-type: application/json' \
-  --data '{
-    "instanceName": "infinity_bot",
-    "qrcode": true,
-    "integration": "WHATSAPP-BAILEYS"
-  }'
+curl -sS -X POST "https://YOUR_EVOLUTION_HOST/instance/create" \
+  -H "apikey: YOUR_EVOLUTION_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"instanceName":"infinity_bot","qrcode":true,"integration":"WHATSAPP-BAILEYS"}'
 ```
 
-### 6.4 Registrar webhook para o backend
-
-Use a URL publica do backend staging:
+Set webhook:
 
 ```bash
-curl --request POST \
-  --url https://evolution-staging.seu-dominio.com/webhook/set/infinity_bot \
-  --header 'apikey: sua_api_key_forte' \
-  --header 'content-type: application/json' \
-  --data '{
+curl -sS -X POST "https://YOUR_EVOLUTION_HOST/webhook/set/infinity_bot" \
+  -H "apikey: YOUR_EVOLUTION_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
     "webhook": {
       "enabled": true,
-      "url": "https://seu-backend-staging.railway.app/v1/webhook",
-      "events": ["MESSAGES_UPSERT"]
+      "url": "https://YOUR_BACKEND.railway.app/v1/webhook",
+      "events": ["MESSAGES_UPSERT"],
+      "webhook_by_events": false,
+      "webhook_base64": false
     }
   }'
 ```
 
-## 7) Checklist final de release
+## 6) Release Checklist
 
-- `uv run pytest -q` passando
-- `cd frontend-react && npm run build` passando
-- Sem `node_modules` e `private_docs` versionados
-- Sem credenciais reais em arquivos tracked
-- `CORS_ALLOW_ORIGINS` com dominios reais
-- `VITE_API_BASE_URL` apontando para backend certo
-
-## 8) Troubleshooting rapido
-
-- `origin_mismatch` no Google:
-  - faltou origem em Authorized JavaScript origins
-- `Checkpointer requires configurable keys`:
-  - backend antigo/stale em execucao
-  - reinicie o processo e valide logs de `thread_id/checkpoint_ns`
-- `Falha de conexao` no frontend:
-  - `VITE_API_BASE_URL` errado ou backend indisponivel
+- `uv run pytest -q` passes
+- `npx promptfoo@latest eval` passes
+- `cd frontend-react && npm run build` passes
+- No real secrets committed
+- CORS and OAuth origins match real domains

@@ -1,105 +1,134 @@
-# Challenge Readiness Checklist (10/10)
+﻿# Challenge Readiness Checklist
 
-Este documento mapeia os requisitos do desafio para evidencias concretas no codigo.
+This checklist maps the coding challenge requirements to concrete implementation evidence.
 
 ## 1) Agent Swarm Architecture
 
-- Requisito: pelo menos 3 agentes distintos.
-- Status: atendido e excedido.
-- Evidencias:
-  - Router Agent: `src/agents/nodes/router_node.py`
-  - Knowledge Agent: `src/agents/nodes/knowledge_node.py`
-  - Support Agent: `src/agents/nodes/support_node.py`
-  - Bonus Agent (Sentiment/Escalation): `src/agents/nodes/sentiment_node.py`
-  - Orquestracao do fluxo: `src/agents/graph.py`
+Requirement:
+- At least 3 distinct agents collaborating.
 
-## 2) Router Agent como ponto de entrada
+Status:
+- Met (4 agents).
 
-- Requisito: analisar mensagem e rotear para agente especializado.
-- Status: atendido.
-- Evidencias:
-  - Classificacao de intencao e linguagem no router.
-  - Conditional edges no grafo (`knowledge`, `support`, `sentiment`): `src/agents/graph.py`
+Evidence:
+- Router: `src/agents/nodes/router_node.py`
+- Knowledge: `src/agents/nodes/knowledge_node.py`
+- Support: `src/agents/nodes/support_node.py`
+- Sentiment (bonus): `src/agents/nodes/sentiment_node.py`
+- Graph orchestration: `src/agents/graph.py`
 
-## 3) Knowledge Agent com RAG + Web Search
+## 2) Router as Primary Entry Point
 
-- Requisito: responder sobre produtos da InfinitePay usando base do site + busca web para perguntas gerais.
-- Status: atendido.
-- Evidencias:
-  - Pipeline de ingestao e chunking: `src/rag/ingest_pipeline.py`, `src/rag/chunker.py`, `src/rag/scraper.py`
-  - Store vetorial Chroma: `src/infrastructure/vector_store/chroma_store.py`
-  - Ferramentas do agente de conhecimento: `src/agents/tools/knowledge_tools.py`
-  - Busca web: `src/infrastructure/search/duckduckgo_searcher.py`
+Requirement:
+- analyze incoming message and route to specialized agent.
 
-## 4) Customer Support Agent com no minimo 2 tools
+Status:
+- Met.
 
-- Requisito: suporte com dados do usuario e pelo menos 2 ferramentas.
-- Status: atendido e excedido.
-- Evidencias:
-  - `lookup_user`
-  - `get_transaction_history`
-  - `create_support_ticket`
-  - `check_service_status`
-  - `reset_password_request`
-  - `get_account_balance`
-  - Arquivo: `src/agents/tools/support_tools.py`
+Evidence:
+- Router classification + route assignment in `router_node.py`
+- conditional routing in `graph.py`
+- deterministic operational-status override to `support`
 
-## 5) Mecanismo claro de comunicacao entre agentes
+## 3) Knowledge Agent with RAG + Web Search
 
-- Requisito: fluxo interno definido.
-- Status: atendido.
-- Evidencias:
-  - StateGraph com estado compartilhado e roteamento condicional: `src/agents/graph.py`
-  - Contrato de estado: `src/agents/state.py`
+Requirement:
+- answer InfinitePay product/service questions grounded in provided web sources
+- support general web search questions
 
-## 6) API HTTP
+Status:
+- Met.
 
-- Requisito: endpoint POST JSON no formato `{message, user_id}`.
-- Status: atendido.
-- Evidencias:
-  - Rota: `src/api/v1/routes/chat.py`
-  - Schema: `src/api/v1/schemas.py`
-  - Endpoint de saude: `src/api/v1/routes/health.py`
+Evidence:
+- RAG ingestion and chunking: `src/rag/`
+- Vector store adapter: `src/infrastructure/vector_store/chroma_store.py`
+- Knowledge tools: `src/agents/tools/knowledge_tools.py`
+- Web search adapter: `src/infrastructure/search/duckduckgo_searcher.py`
 
-## 7) Dockerizacao
+## 4) Support Agent with 2+ Tools
 
-- Requisito: Dockerfile e setup simples de execucao.
-- Status: atendido.
-- Evidencias:
-  - `Dockerfile`
-  - `docker-compose.yml`
+Requirement:
+- customer support agent with at least 2 tools.
 
-## 8) Testes
+Status:
+- Met (6 tools).
 
-- Requisito: estrategia de testes e base automatizada.
-- Status: atendido.
-- Evidencias:
-  - Unitarios: `tests/unit/`
-  - Integracao API: `tests/integration/test_api.py`
-  - Regressao de lifecycle de checkpointer: `tests/unit/test_container.py`
-  - Avaliacao de prompts: `tests/promptfoo_provider.py`, `promptfooconfig.yaml`
+Evidence:
+- `lookup_user`
+- `get_transaction_history`
+- `create_support_ticket`
+- `check_service_status`
+- `reset_password_request`
+- `get_account_balance`
+- File: `src/agents/tools/support_tools.py`
+- Seeded demo users/transactions for evaluator usability: `src/infrastructure/persistence/in_memory_user_repo.py`, `docs/MOCK_DATA.md`
 
-## 9) Bonus challenges
+## 5) Agent Communication Mechanism
 
-- 4o agente custom: atendido (Sentiment/Escalation).
-- Guardrails: atendido (`input_guard.py`, `output_guard.py`).
-- Redirect para humano: atendido (`src/api/v1/routes/escalation.py`, `src/api/v1/routes/webhook.py`).
+Requirement:
+- clear communication/data flow mechanism.
 
-## 10) Qualidade e maturidade tecnica
+Status:
+- Met.
 
-- Arquitetura em camadas com separacao de dominio e infraestrutura.
-- Inversao de dependencias via ports/adapters.
-- Checkpointer com lifecycle seguro e fallback defensivo no runtime.
-- Frontend React com:
-  - Google Auth
-  - sessao efemera por login/reload
-  - quick suggestions centrais e laterais
-  - layout responsivo e sidebar com rolagem funcional
+Evidence:
+- LangGraph shared state (`AgentState`) + conditional edges in `src/agents/graph.py`
 
-## Comandos de validacao recomendados
+## 6) API Endpoint
+
+Requirement:
+- HTTP POST endpoint accepting `{ message, user_id }` and returning meaningful JSON.
+
+Status:
+- Met.
+
+Evidence:
+- Route: `src/api/v1/routes/chat.py`
+- Schemas: `src/api/v1/schemas.py`
+- Health endpoint: `src/api/v1/routes/health.py`
+
+## 7) Dockerization
+
+Requirement:
+- runnable Docker setup.
+
+Status:
+- Met.
+
+Evidence:
+- `Dockerfile`
+- `docker-compose.yml`
+
+## 8) Testing Strategy
+
+Requirement:
+- documented strategy + automated tests.
+
+Status:
+- Met.
+
+Evidence:
+- Unit tests: `tests/unit/`
+- Integration tests: `tests/integration/test_api.py`
+- Prompt evaluation: `promptfooconfig.yaml`, `tests/promptfoo_provider.py`
+
+## 9) Bonus Targets
+
+- Fourth agent: Met (`sentiment_node.py`)
+- Guardrails: Met (`input_guard.py`, `output_guard.py`)
+- Human redirect: Met (`escalation.py`, `webhook.py`)
+
+## 10) Validation Commands
 
 ```bash
 uv run pytest -q
+npx promptfoo@latest eval
 cd frontend-react && npm run build
+python scripts/evaluator_smoke.py --base-url http://localhost:8000 --user-id client789
+docker compose exec infinity-agent python scripts/evaluator_smoke.py --base-url http://localhost:8000 --user-id client789
 ```
 
+## Notes
+
+- Legacy planning artifacts are archived in `docs/archive/`.
+- Current architecture reference is root `architecture_review.md`.
