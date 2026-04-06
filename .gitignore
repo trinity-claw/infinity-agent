@@ -26,6 +26,7 @@ frontend-react/.env.local
 .idea/
 *.swp
 *.swo
+.claude
 
 # OS
 .DS_Store
