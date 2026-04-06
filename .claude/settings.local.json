@@ -4,7 +4,8 @@
       "Bash(.venv/Scripts/python:*)",
       "Skill(browse)",
       "Skill(gstack-upgrade)",
-      "Skill(plan-eng-review)"
+      "Skill(plan-eng-review)",
+      "Bash(ls /home/pelissa/Documents/dev/infinity-agent/*.md)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-﻿# Documentation Index
+# Documentation Index
 
 This folder contains evaluator-facing technical documentation.
 
@@ -13,15 +13,11 @@ This folder contains evaluator-facing technical documentation.
 - `DEPLOY_VERCEL_RAILWAY_EVOLUTION.md`
   - Split deployment strategy (Vercel frontend + Railway backend + Evolution API staging).
 - `PRESENTATION_QA.md`
-  - Curated presentation/rehearsal question matrix with acceptance criteria.
+  - Curated test scenarios with expected routes and acceptance criteria.
 - `MOCK_DATA.md`
   - Seeded in-memory accounts and recommended user IDs for support demos.
-- `FINAL_REVIEW.md`
-  - Final evaluator-facing review with compliance status, risk notes, and go/no-go checklist.
-- `POST_DEPLOY_CHECKLIST.md`
-  - Fast validation checklist for VPS deploy (streaming, Brave search, and human handoff).
 
-## Architecture Review
+## Architecture Reference
 
 - Root `architecture_review.md`
-  - Current architecture review plus Excalidraw diagram guide and 10-15 min presentation script.
+  - Full architecture review: stack, code map, runtime flow, agent graph, system context, request lifecycle, WhatsApp handoff, hardening, Docker topology, and observability entry points.

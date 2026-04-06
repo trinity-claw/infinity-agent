@@ -1,253 +1,228 @@
-# Infinity Agent - Presentation Companion (Architecture Review)
+# Script de Apresentação — Infinity Agent
 
-Este roteiro acompanha o `architecture_review.md`.
-Ele segue a mesma ordem das 14 fases do review original, mas adiciona os pontos de decisao arquitetural que costumam faltar na fala.
+## Como usar
 
-Como usar:
-- Tela 1: `architecture_review.md`
-- Tela 2: este roteiro
-- App para demos curtas
-- `/docs` para fechamento
+- Tela principal: `architecture_review.md` (arquivo na raiz)
+- Tela lateral: este arquivo
+- Tempo estimado: 12–15 minutos
 
-Tempo alvo: 12 a 15 minutos.
+As seções deste script seguem a ordem das seções do `architecture_review.md`.
 
 ---
 
-## Fase 1 - Current Project State
+## 1 — Estado atual do projeto (1 min)
 
-O que mostrar:
-- secao `1) Current Project State`
+**Mostrar:** seção 1 do architecture_review.md
 
-Como falar:
-"Aqui eu posiciono o estado atual: o sistema ja esta pronto para avaliacao, com swarm de 4 agentes, API, RAG, web search, handoff humano, Docker e testes."
+O sistema implementa um agent swarm de 4 agentes para processar mensagens de suporte da InfinitePay.
+A diferença de um chatbot simples é que o controle de fluxo é explícito: cada mensagem passa por validação, roteamento determinístico e um agente especializado antes de qualquer geração de resposta.
 
-Decisao arquitetural:
-- Escolhemos fechar o escopo em uma arquitetura completa fim a fim, nao em um prototipo de prompt.
-
-Trade-off:
-- Mais componentes para integrar.
-- Em troca, mais confiabilidade e menos risco de demo quebrar por comportamento imprevisivel.
+Swarm aqui não significa agentes em paralelo — significa um grafo de controle onde cada nó tem responsabilidade única e fronteiras bem definidas.
+A comunicação entre agentes é feita via estado compartilhado (`AgentState`) — sem filas, sem eventos externos.
 
 ---
 
-## Fase 2 - Architecture Summary
+## 2 — Stack e atribuição de modelos (1 min)
 
-O que mostrar:
-- secao `2) Architecture Summary`
-- stack e model mapping
+**Mostrar:** seção 2, tabela de model mapping
 
-Como falar:
-"Aqui esta a fundacao em runtime: LangGraph para orquestracao, FastAPI para API, Chroma para conhecimento, SQLite para checkpoint, Brave para web search e OpenRouter para modelos por papel."
+O acesso a LLMs passa pelo OpenRouter, o que permite trocar o modelo por papel sem alterar código.
 
-Decisoes arquiteturais:
-- Orquestracao por grafo (LangGraph) em vez de fluxo linear.
-- Modelos por papel (router rapido, knowledge/support mais robustos).
+Decisões de modelo:
+- **Router** usa `gpt-4o-mini` (temp=0.0) porque só precisa de classificação — não de raciocínio profundo. Latência baixa é prioritária aqui.
+- **Knowledge** usa `gemini-2.5-flash` porque lida com contextos de documentos longos na recuperação RAG.
+- **Support** usa `claude-sonnet-4.5` porque a persona de atendimento exige qualidade de resposta mais alta e instrução seguida com fidelidade.
+- **Sentiment e Guardrail** voltam para `gpt-4o-mini` — são classificadores de baixa complexidade.
 
-Trade-off:
-- Configuracao mais complexa.
-- Beneficio: separacao clara de responsabilidade, previsibilidade e custo melhor controlado.
+Cada modelo é uma variável de ambiente. O mesmo agente pode usar um modelo mais barato em staging e um mais robusto em produção sem mudança de código.
 
 ---
 
-## Fase 3 - Real Code Map (by Layer)
+## 3 — Mapa de código por camada (1 min)
 
-O que mostrar:
-- secao `3) Real Code Map (by Layer)`
+**Mostrar:** seção 3, lista de arquivos
 
-Como falar:
-"A estrutura esta em camadas: API, orquestracao, nodes, tools, dominio e infraestrutura. Isso evita acoplamento direto e facilita manutencao."
+A estrutura segue clean architecture:
+- `domain/ports/` define interfaces abstratas: `KnowledgeStore`, `UserRepository`, `WebSearcher`.
+- `infrastructure/` implementa: ChromaDB, in-memory repos, Brave Search, WhatsApp client.
+- Os agentes recebem as implementações por injeção de dependência via `container.py`.
 
-Decisao arquitetural:
-- Adotar portas/adapters no dominio para trocar infraestrutura sem quebrar agente.
-
-Exemplo rapido:
-- O repositório de usuario pode sair de in-memory para banco real sem reescrever o fluxo dos agentes.
+Consequência prática: o repositório de usuário pode migrar de in-memory para PostgreSQL sem reescrever nenhum node de agente.
+O mesmo vale para o vector store — trocar Chroma por Pinecone é só trocar o adapter.
 
 ---
 
-## Fase 4 - Runtime Flow (Actual)
+## 4 — Fluxo de runtime (1 min)
 
-O que mostrar:
-- secao `4) Runtime Flow (Actual)`
+**Mostrar:** seção 4
 
-Como falar:
-"Toda mensagem passa por input guard, roteador, agente especializado e output guard. No streaming, enviamos status e chunks para nao deixar o usuario no escuro."
+O endpoint `/v1/chat` constrói o `AgentState` inicial e chama `swarm.ainvoke()`.
+O endpoint `/v1/chat/stream` usa `swarm.astream(stream_mode="updates")` e emite eventos SSE por node executado:
+- `event: status` — identifica qual node está rodando
+- `event: token` — chunks do texto final
+- `event: final` — payload completo
+- `event: done` — marcador de encerramento
 
-Decisoes arquiteturais:
-- Guardrail em duas pontas: entrada e saida.
-- Endpoint de streaming separado do endpoint padrao.
-
-Trade-off:
-- Mais logica de ciclo de resposta.
-- Beneficio: UX melhor e menor risco de saida insegura.
+O frontend usa esses eventos para exibir indicadores de progresso em tempo real enquanto o swarm processa.
 
 ---
 
-## Fase 5 - Agent Graph Diagram
+## 5 — Diagrama do grafo e mecânica do LangGraph (3 min)
 
-O que mostrar:
-- secao `5) Agent Graph Diagram`
+**Mostrar:** seção 5, diagrama ASCII
 
-Como falar:
-"Esse diagrama representa a politica de controle do sistema. O objetivo aqui foi ter um caminho simples de auditar: START, validacao, roteamento, especializacao e sanitizacao final."
+O grafo é compilado em `graph.py` via `StateGraph(AgentState).compile(checkpointer=...)`.
 
-Decisao arquitetural:
-- Grafo explicito para tornar roteamento auditavel e testavel.
+O checkpointer SQLite persiste o histórico de mensagens por `thread_id` — isso dá memória de conversação sem gerenciar sessão no nível de aplicação.
 
----
+**Cada borda do grafo é uma política:**
 
-## Fase 6 - System Context Diagram
+`START → input_guard`:
+- Único caminho de entrada. Toda mensagem passa pelo guard antes de qualquer agente.
 
-O que mostrar:
-- secao `6) System Context Diagram`
+`input_guard → router | END`:
+- Condicional em `guardrail_blocked`. Se `True`, o grafo termina imediatamente — nenhum LLM adicional é invocado. A validação é um gate real, não um aviso.
 
-Como falar:
-"Aqui eu mostro as fronteiras do sistema: o que e interno, o que e externo e o que e opcional. Isso deixa claro onde estao dependencias criticas e pontos de falha."
+`router → knowledge | support | sentiment`:
+- O router emite JSON estruturado: `{intent, language, confidence, reasoning}`.
+- Se o JSON não parsear, fallback determinístico para `knowledge`.
+- **Override determinístico**: padrões como `"status"`, `"outage"`, `"fora do ar"`, `"instabilidade"` no texto do usuário forçam `route=support` antes mesmo do LLM classificar. Isso garante que queries operacionais críticas não sejam respondidas como se fossem perguntas de produto.
 
-Decisoes arquiteturais:
-- Evolution API como dependencia opcional.
-- Persistencia local de estado (SQLite) e conhecimento (Chroma) no core.
+`knowledge | support | sentiment → output_guard → END`:
+- Todos os agentes convergem para o mesmo guard de saída. PII masking acontece uma vez, depois do agente especializado.
 
-Trade-off:
-- Menos acoplamento com canal de mensageria na demo.
-- Handoff continua disponivel quando necessario.
+**O campo `messages` usa o reducer `add_messages`** do LangGraph — cada nó appenda ao histórico em vez de sobrescrever. Isso mantém rastreabilidade completa de qual agente gerou cada mensagem.
 
 ---
 
-## Fase 7 - Request Lifecycle
+## 6 — Trace E2E: "Why I am not able to make transfers?"
 
-O que mostrar:
-- secao `7) Request Lifecycle`
+**Mostrar:** seção 7, Request Lifecycle
 
-Como falar:
-"O ciclo reforca uma escolha importante: antes de gerar resposta, o sistema escolhe o caminho certo. Em atendimento, roteamento correto vale tanto quanto qualidade de texto."
+Vou rastrear essa mensagem do challenge de ponta a ponta.
 
-Decisao arquitetural:
-- Override deterministico para termos operacionais de status/outage indo para Support.
+**1. HTTP**
+`POST /v1/chat` recebe `{message: "Why I am not able to make transfers?", user_id: "client789"}`.
+A API constrói `AgentState` com `HumanMessage` e chama `swarm.ainvoke(initial_state, config={thread_id: "client789"})`.
 
-Por que isso importa:
-- Reduz erro de rota em cenarios criticos, que eram os mais sensiveis do challenge.
+**2. input_guard**
+Verifica três blocklists via regex + normalização Unicode NFD. Sem match. Retorna `guardrail_blocked=False`.
+Zero LLM calls aqui.
 
----
+**3. router**
+O texto contém `"can't"` + `"transfer"` — o padrão `_SUPPORT_OPERATIONAL_PATTERNS` não precisa do LLM para classificar isso como `support`.
+Se o override não tivesse ativado, o LLM teria classificado com alta confiança como `support` de qualquer forma.
+Estado atualizado: `intent="support"`, `agent_route="support"`, `language="en"`.
 
-## Fase 8 - WhatsApp Escalation and Human Handoff
+**4. support_node**
+- Cria as 6 tools com `bound_user_id="client789"` — nenhum tool aceita um user_id diferente.
+- `llm.bind_tools(tools)` — o LLM recebe as tool schemas.
+- **Round 1**: LLM decide chamar `lookup_user` → retorna nome, plano, status da conta, email.
+- **Round 2**: LLM decide chamar `check_service_status` → retorna status de Pix, Maquininha, etc.
+- **Round 3**: sem mais tool calls — LLM sintetiza resposta empática usando os dados reais da conta.
+- O node faz loop de até 3 rounds — o suporte pode resolver casos multi-etapa sem sair do grafo.
 
-O que mostrar:
-- secao `8) WhatsApp Escalation and Human Handoff`
+**5. output_guard**
+Regex de CPF/CNPJ/email/phone — sem match nessa resposta.
 
-Como falar:
-"No handoff, a decisao foi continuidade assincroma. Em vez de prometer atendimento humano instantaneo no mesmo canal, o sistema abre sessao e entrega contexto para o operador seguir com qualidade."
+**6. Resposta**
+`_extract_final_agent_response` percorre as mensagens em ordem reversa, pula mensagens do router e humanas, retorna o último `AIMessage` com `name="support"`.
+API retorna `{response: "...", agent_used: "support", intent: "support", language: "en", metadata: {...}}`.
 
-Decisao arquitetural:
-- Handoff assincromo com payload enriquecido.
-
-Trade-off:
-- Nao e chat humano sincrono imediato.
-- Em troca, temos resiliencia operacional e menos dependencia de disponibilidade em tempo real.
-
----
-
-## Fase 9 - Hardening Implemented
-
-O que mostrar:
-- secao `9) Hardening Implemented`
-
-Como falar:
-"Aqui estao os mecanismos que deixam o comportamento menos fragil: override do router, fallback de sobreposicao no knowledge e caminho web deterministico para perguntas gerais."
-
-Decisoes arquiteturais:
-- Evitar fallback generico quando o caso e operacional.
-- Evitar depender so de inferencia livre do modelo para decidir tudo.
+**Custo total de LLM calls:** guardrail=0, router=1, support loop=2–3, total ≈ 3–4 calls em série.
 
 ---
 
-## Fase 10 - Docker and Runtime Topology
+## 7 — RAG Pipeline (1–2 min)
 
-O que mostrar:
-- secao `10) Docker and Runtime Topology`
+**Mostrar:** seção 3, bloco RAG Ingestion
 
-Como falar:
-"O deploy foi pensado para avaliacao objetiva: sobe o core com um comando, e o WhatsApp entra por profile quando necessario."
+A ingestão é um processo separado do runtime, executado uma vez via `python -m scripts.ingest`.
 
-Decisao arquitetural:
-- `infinity-agent` sempre disponivel.
-- `evolution-api` opcional por profile.
+**Ingestão:**
+1. `scraper.py` busca as 27 URLs do InfinitePay com `httpx` + `BeautifulSoup`, remove `script/style/nav/footer`.
+2. `chunker.py` divide em chunks de 512 chars com 100 de overlap. O ID de cada chunk é um hash MD5 de `(url, index)` — re-ingestão é idempotente, não cria duplicatas no Chroma.
+3. `ingest_pipeline.py` insere em batches de 50 no ChromaDB. O modelo de embedding default (`all-MiniLM-L6-v2`) é local — sem dependência de API externa para embeddings.
 
-Por que foi escolhido:
-- Minimiza pontos de falha na avaliacao e simplifica reproducao.
-
----
-
-## Fase 11 - OpenAPI and Observability Entry Points
-
-O que mostrar:
-- secao `11) OpenAPI and Observability Entry Points`
-- abrir `/docs`
-
-Como falar:
-"Aqui eu mostro governanca de API: contrato claro, health endpoint e ponto de inspecao. Isso facilita validacao tecnica sem depender do frontend."
-
-Decisao arquitetural:
-- Tratar API como produto de primeira classe para avaliador e operacao.
+**Retrieval em runtime:**
+- Se a mensagem contém keywords InfinitePay (maquininha, pix, boleto, taxa, conta digital...), `knowledge_node` chama `search_knowledge_base` → ChromaDB retorna top-5 chunks por similaridade cosseno com metadados de URL.
+- Se a mensagem não tem relação com InfinitePay, o nó detecta isso com regex e executa diretamente o path Brave Search — sem LLM decidindo qual tool usar para queries claramente externas. Isso elimina latência extra e evita que o modelo alucine contexto de produto em perguntas gerais.
 
 ---
 
-## Fase 12 - Excalidraw Build Guide
+## 8 — Guardrails (1 min)
 
-O que mostrar:
-- secao `12) Excalidraw Build Guide`
+**Mostrar:** seção 9
 
-Como falar:
-"Essa parte nao muda o sistema, mas melhora comunicacao tecnica. Padronizar visual ajuda a reduzir ambiguidade na leitura da arquitetura."
+**Input guard — três camadas:**
+1. **Injection patterns**: ~50 padrões como `"ignore previous instructions"`, `"DAN mode"`, variantes em português.
+2. **Disclosure patterns**: perguntas sobre modelo, prompt de sistema, configuração interna.
+3. **Blocked topics**: fraude, clonagem de cartão, phishing, lavagem de dinheiro.
 
----
+Normalização Unicode NFD + lowercase antes de comparar — variantes com acentos não escapam.
+Implementação puramente heurística — zero LLM calls. Comportamento 100% previsível.
 
-## Fase 13 - 10-15 Minute Presentation Script
-
-O que mostrar:
-- secao `13) 10-15 Minute Presentation Script`
-
-Como falar:
-"Eu sigo essa distribuicao para equilibrar profundidade tecnica e demonstracao real. O foco nao e mostrar tudo, e mostrar as decisoes certas."
-
-Dica de ritmo:
-- Se estiver estourando tempo, reduza detalhes da fase 12 e mantenha fases 7, 8 e 9 completas.
+**Output guard:**
+Regex aplicadas ao texto final antes de sair do sistema: CPF `***.***789-00`, CNPJ, email `u***@example.com`, telefone `***-***-1234`.
 
 ---
 
-## Fase 14 - Final Notes
+## 9 — Escalação humana (1 min)
 
-O que mostrar:
-- secao `14) Final Notes`
+**Mostrar:** seção 8
 
-Como falar:
-"Fechando: este review e orientado ao que esta implementado hoje. Se o comportamento do sistema muda, o documento muda junto para manter coerencia tecnica."
+Quando o Sentiment Agent determina escalação, a tool `escalate_to_human()` cria uma sessão no `session_store` in-memory com `session_id` UUID e `session_token` UUID.
 
----
+O token é validado com `secrets.compare_digest` — timing-safe, resiste a timing attacks.
 
-## Bloco de demo (prompts)
+O operador recebe via WhatsApp uma mensagem enriquecida:
+- `session_id`, motivo da escalação, nome do cliente, email, telefone.
 
-Use nessa ordem:
-1. `Quais sao as taxas da Maquininha Smart?`
-2. `Quais as principais noticias de Sao Paulo hoje?`
-3. `Qual o status atual dos servicos da InfinitePay?`
-4. `Quero falar com um atendente humano agora.`
+O canal de continuidade é **assíncrono por design**: o cliente é informado que o atendimento segue por WhatsApp/email. Isso evita dependência de disponibilidade em tempo real do operador.
 
-Plano B:
-- `Quando foi o ultimo jogo do Palmeiras?`
+Após escalação, mensagens do cliente com `session_id + session_token` válidos são encaminhadas diretamente ao operador — o swarm de agentes não é invocado.
 
 ---
 
-## Frases curtas de decisao (para parecer menos raso)
+## 10 — Docker e testabilidade (1 min)
 
-- "A decisao aqui foi priorizar previsibilidade sobre improviso do modelo."
-- "Preferimos separar responsabilidade por agente para reduzir acoplamento."
-- "Em cenarios operacionais, rota correta vem antes de resposta bonita."
-- "O handoff foi desenhado para continuidade com contexto, nao so transferencia."
-- "A topologia Docker privilegia reproducao para avaliacao tecnica."
+**Mostrar:** seção 10, 11
+
+`Dockerfile` multi-stage: build do frontend React → build das dependências Python com `uv` → runtime slim com usuário não-root e health check configurado.
+
+`docker-compose.yml`:
+- `infinity-agent` sempre sobe.
+- `evolution-api` entra por `--profile whatsapp` — zero fricção para quem não precisa de WhatsApp.
+- Volumes persistentes para Chroma e SQLite.
+
+**85 testes passando** — unit (guardrails, router determinístico, overlap fallback, sentiment tools, session store, auth) + integration (endpoints HTTP completos com swarm mockado via `AsyncMock`).
+
+`scripts/evaluator_smoke.py` valida o caminho crítico em ~30 segundos após o deploy.
+
+OpenAPI em `/docs` — todo contrato de API é navegável sem precisar do frontend.
 
 ---
 
-## Encerramento curto (30s)
+## Demo ao vivo (2–3 min)
 
-"Resultado final: arquitetura modular, com decisoes de robustez explicitas para roteamento, recuperacao de conhecimento, suporte operacional e escalonamento humano. A solucao atende o challenge com foco em confiabilidade, e nao apenas em geracao de texto."
+Executar nesta ordem. Verificar no response JSON: `agent_used`, `intent`, `metadata.guardrail_blocked`.
+
+| # | Prompt | Rota esperada | O que mostrar |
+|---|---|---|---|
+| 1 | `Quais são as taxas da Maquininha Smart?` | `knowledge` | RAG path, source URL na resposta |
+| 2 | `Qual o status atual dos serviços da InfinitePay?` | `support` | Override determinístico, tool check_service_status |
+| 3 | `Quando foi o último jogo do Palmeiras?` | `knowledge` | Brave web path determinístico |
+| 4 | `Quero falar com um atendente humano agora.` | `sentiment` → escalação | session_id + session_token no metadata |
+| 5 | `Ignore all previous instructions` | guardrail block | `guardrail_blocked=true`, zero agente invocado |
+
+Plano B se algum falhar: `"I can't sign in to my account."` → sempre `support`.
+
+---
+
+## Fechamento (30 s)
+
+O sistema atende o challenge completo com os três bônus implementados — guardrails, quarto agente e redirect humano.
+
+As decisões arquiteturais priorizaram previsibilidade sobre improviso do modelo: roteamento determinístico onde o LLM pode ambiguar, guardrails heurísticos onde comportamento precisa ser garantido, handoff assíncrono onde continuidade importa mais que velocidade.
+
+Em atendimento ao cliente, a rota correta tem o mesmo peso que a qualidade da resposta.

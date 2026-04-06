@@ -62,6 +62,11 @@ private_docs/
 .superdesign
 docs/archive/
 
+# Private presenter docs (internal working documents, not for evaluator)
+docs/ARCHITECTURE_REVIEW_PRESENTATION.md
+docs/FINAL_REVIEW.md
+docs/POST_DEPLOY_CHECKLIST.md
+
 # Local migration snapshots (keep local, do not version)
 old_*.js
 old_*.html

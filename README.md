@@ -242,11 +242,6 @@ http://localhost:8000/docs
 ```text
 http://localhost:8000
 ```
-6. Run final deploy checks before demo:
-```text
-docs/POST_DEPLOY_CHECKLIST.md
-```
-
 ## RAG Pipeline
 
 - Source ingestion defined in `src/rag/scraper.py`
