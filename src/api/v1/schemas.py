@@ -34,6 +34,13 @@ class ChatRequest(BaseModel):
             "to the human operator instead of the AI swarm."
         ),
     )
+    session_token: Optional[str] = Field(
+        default=None,
+        description=(
+            "Escalation session token required when sending messages to an active "
+            "human handoff session."
+        ),
+    )
 
 
 class ChatResponse(BaseModel):

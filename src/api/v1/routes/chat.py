@@ -137,6 +137,16 @@ def _append_async_handoff_note(text: str) -> str:
     return f"{text}{note}"
 
 
+def _require_valid_handoff_session(session_id: str, session_token: str | None):
+    """Validate handoff session credentials before forwarding chat messages."""
+    session = session_store.get_session(session_id)
+    if not session or not session.active:
+        raise HTTPException(status_code=404, detail="Session not found or closed")
+    if not session_store.validate_session_token(session_id, session_token):
+        raise HTTPException(status_code=403, detail="Invalid escalation session credentials")
+    return session
+
+
 @router.post(
     "/chat",
     response_model=ChatResponse,
@@ -167,30 +177,30 @@ async def chat(request: ChatRequest) -> ChatResponse:
     sender_label = authenticated_user.get("name", thread_id)
 
     if request.session_id:
-        session = session_store.get_session(request.session_id)
-        if session and session.active:
-            session_store.add_message(request.session_id, sender="user", content=request.message)
-            if settings.whatsapp_enabled:
-                whatsapp_client.send_message(
-                    session.operator_number,
-                    f"*{sender_label}:* {request.message}",
-                )
-
-            metadata = {
-                "escalated": True,
-                "guardrail_blocked": False,
-                "session_id": request.session_id,
-            }
-            if authenticated_user:
-                metadata["authenticated_user"] = authenticated_user
-
-            return ChatResponse(
-                response="Mensagem enviada ao atendente. Aguarde a resposta.",
-                agent_used="human",
-                intent="escalation",
-                language="pt-BR",
-                metadata=metadata,
+        session = _require_valid_handoff_session(request.session_id, request.session_token)
+        session_store.add_message(request.session_id, sender="user", content=request.message)
+        if settings.whatsapp_enabled:
+            whatsapp_client.send_message(
+                session.operator_number,
+                f"*{sender_label}:* {request.message}",
             )
+
+        metadata = {
+            "escalated": True,
+            "guardrail_blocked": False,
+            "session_id": request.session_id,
+            "session_token": session.session_token,
+        }
+        if authenticated_user:
+            metadata["authenticated_user"] = authenticated_user
+
+        return ChatResponse(
+            response="Mensagem enviada ao atendente. Aguarde a resposta.",
+            agent_used="human",
+            intent="escalation",
+            language="pt-BR",
+            metadata=metadata,
+        )
 
     try:
         swarm = await container.get_swarm()
@@ -231,6 +241,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
             active_session = session_store.get_session_by_user(thread_id)
             if active_session:
                 extra_metadata["session_id"] = active_session.session_id
+                extra_metadata["session_token"] = active_session.session_token
                 if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(active_session.session_id):
                     contact = await _resolve_handoff_contact(thread_id, authenticated_user)
                     reason = str(result.get("metadata", {}).get("escalation_reason", "")).strip()
@@ -261,12 +272,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
             request.user_id,
             thread_id,
             checkpoint_ns,
-            str(exc),
+            exc,
             exc_info=True,
         )
         raise HTTPException(
             status_code=500,
-            detail=f"Internal error processing message: {str(exc)}",
+            detail="Internal error while processing the message.",
         ) from exc
 
 
@@ -288,37 +299,37 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
     yield _sse_event("status", {"message": "Recebido. Iniciando fluxo do agente..."})
 
     if request.session_id:
-        session = session_store.get_session(request.session_id)
-        if session and session.active:
-            session_store.add_message(request.session_id, sender="user", content=request.message)
-            if settings.whatsapp_enabled:
-                whatsapp_client.send_message(
-                    session.operator_number,
-                    f"*{sender_label}:* {request.message}",
-                )
+        session = _require_valid_handoff_session(request.session_id, request.session_token)
+        session_store.add_message(request.session_id, sender="user", content=request.message)
+        if settings.whatsapp_enabled:
+            whatsapp_client.send_message(
+                session.operator_number,
+                f"*{sender_label}:* {request.message}",
+            )
 
-            final_payload = {
-                "response": "Mensagem enviada ao atendente. Aguarde a resposta.",
-                "agent_used": "human",
-                "intent": "escalation",
-                "language": "pt-BR",
-                "metadata": {
-                    "escalated": True,
-                    "guardrail_blocked": False,
-                    "session_id": request.session_id,
-                    **(
-                        {"authenticated_user": authenticated_user}
-                        if authenticated_user
-                        else {}
-                    ),
-                },
-            }
-            for chunk in _chunk_text(final_payload["response"]):
-                yield _sse_event("token", {"delta": chunk})
-                await asyncio.sleep(0)
-            yield _sse_event("final", final_payload)
-            yield _sse_event("done", {"ok": True})
-            return
+        final_payload = {
+            "response": "Mensagem enviada ao atendente. Aguarde a resposta.",
+            "agent_used": "human",
+            "intent": "escalation",
+            "language": "pt-BR",
+            "metadata": {
+                "escalated": True,
+                "guardrail_blocked": False,
+                "session_id": request.session_id,
+                "session_token": session.session_token,
+                **(
+                    {"authenticated_user": authenticated_user}
+                    if authenticated_user
+                    else {}
+                ),
+            },
+        }
+        for chunk in _chunk_text(final_payload["response"]):
+            yield _sse_event("token", {"delta": chunk})
+            await asyncio.sleep(0)
+        yield _sse_event("final", final_payload)
+        yield _sse_event("done", {"ok": True})
+        return
 
     try:
         swarm = await container.get_swarm()
@@ -409,6 +420,7 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
             active_session = session_store.get_session_by_user(thread_id)
             if active_session:
                 merged_metadata["session_id"] = active_session.session_id
+                merged_metadata["session_token"] = active_session.session_token
                 if settings.whatsapp_enabled and not session_store.is_detail_notice_sent(active_session.session_id):
                     contact = await _resolve_handoff_contact(thread_id, authenticated_user)
                     reason = str(merged_metadata.get("escalation_reason", "")).strip()
@@ -445,12 +457,12 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
             request.user_id,
             thread_id,
             checkpoint_ns,
-            str(exc),
+            exc,
             exc_info=True,
         )
         yield _sse_event(
             "error",
-            {"detail": f"Internal error processing message: {str(exc)}"},
+            {"detail": "Internal error while processing the message."},
         )
         yield _sse_event("done", {"ok": False})
 
@@ -465,6 +477,9 @@ async def _chat_stream_generator(request: ChatRequest) -> AsyncGenerator[str, No
 )
 async def chat_stream(request: ChatRequest) -> StreamingResponse:
     """Streaming chat endpoint (SSE)."""
+    if request.session_id:
+        _require_valid_handoff_session(request.session_id, request.session_token)
+
     return StreamingResponse(
         _chat_stream_generator(request),
         media_type="text/event-stream",
