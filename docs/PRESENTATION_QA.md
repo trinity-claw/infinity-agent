@@ -114,9 +114,12 @@ Format:
 - Prompt in UI: `Quero falar com um atendente humano`
 - Operator reply in WhatsApp: `Como posso te ajudar?`
 - Expected behavior:
-  - UI receives operator reply via escalation polling/session
+  - escalation is confirmed in UI with asynchronous continuity note (WhatsApp/email)
+  - operator receives enriched handoff message (session, reason, name, email, phone)
+  - if session polling bridge is enabled in environment, operator reply can also appear in UI
 - Anti-patterns:
-  - WhatsApp message sent but UI never updates
+  - missing customer contact fields in handoff message
+  - escalation response without asynchronous continuity guidance
 
 ## Runbook Notes
 

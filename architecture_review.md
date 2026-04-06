@@ -1,112 +1,316 @@
-﻿# Architecture Review - Infinity Agent (Current)
+# Infinity Agent - Architecture Review and Excalidraw Guide (Current Implementation)
 
-This is the active architecture review for the current implementation.
+This is the canonical architecture review for the repository as implemented today.
+Use this document as the presenter guide for a 10-15 minute demo video.
 
-## 1) System Purpose
+## 1) Current Project State
 
-Infinity Agent is a multi-agent support system for InfinitePay challenge scenarios.
-It handles:
-- product/feature Q&A with RAG grounding
-- account/support troubleshooting via tool-enabled support agent
-- escalation to human handoff path
-- WhatsApp webhook interoperability through Evolution API
+The project is fully implemented and evaluator-ready, with:
+- 4-agent swarm (Router, Knowledge, Support, Sentiment)
+- FastAPI backend with standard and streaming chat endpoints
+- RAG pipeline (scraping + chunking + Chroma retrieval)
+- External web search via Brave Search API
+- Human handoff workflow with WhatsApp bridge
+- Docker-first local and server run path
+- Unit/integration tests and prompt-level evaluation
 
-## 2) Runtime Architecture
+## 2) Architecture Summary
 
-### Main Components
+Main runtime stack:
+- Orchestration: LangGraph StateGraph
+- API: FastAPI (`/v1/*`)
+- LLM access: OpenRouter (role-specific models)
+- Vector store: ChromaDB (persistent volume)
+- Search: Brave Search
+- State/checkpoint: SQLite (persistent volume)
+- Optional handoff channel: Evolution API (WhatsApp)
 
-- API layer (FastAPI)
-  - `src/api/v1/routes/chat.py`
-  - `src/api/v1/routes/health.py`
-  - `src/api/v1/routes/escalation.py`
-  - `src/api/v1/routes/webhook.py`
+### Active model mapping by role
 
-- Agent orchestration (LangGraph)
-  - graph: `src/agents/graph.py`
-  - shared state: `src/agents/state.py`
+From `src/settings.py`:
+- Router: `openai/gpt-4o-mini`
+- Knowledge: `google/gemini-2.5-flash`
+- Support: `anthropic/claude-sonnet-4.5`
+- Sentiment: `openai/gpt-4o-mini`
+- Guardrail: `openai/gpt-4o-mini`
 
-- Agent nodes
-  - router: `src/agents/nodes/router_node.py`
-  - knowledge: `src/agents/nodes/knowledge_node.py`
-  - support: `src/agents/nodes/support_node.py`
-  - sentiment: `src/agents/nodes/sentiment_node.py`
+## 3) Real Code Map (by Layer)
 
-- Guardrails
-  - input: `src/agents/guardrails/input_guard.py`
-  - output: `src/agents/guardrails/output_guard.py`
+### API / Presentation
+- `src/main.py`
+- `src/api/v1/routes/chat.py`
+- `src/api/v1/routes/health.py`
+- `src/api/v1/routes/escalation.py`
+- `src/api/v1/routes/webhook.py`
+- `src/api/v1/schemas.py`
 
-- RAG and retrieval
-  - ingestion/chunking: `src/rag/`
-  - vector store adapter: `src/infrastructure/vector_store/chroma_store.py`
-  - knowledge tools: `src/agents/tools/knowledge_tools.py`
+### Agent Orchestration
+- `src/agents/graph.py`
+- `src/agents/state.py`
+- `src/agents/swarm_config.py`
 
-- Support tools and repositories
-  - support tools: `src/agents/tools/support_tools.py`
-  - user/ticket repositories: `src/infrastructure/persistence/`
+### Agent Nodes
+- `src/agents/nodes/router_node.py`
+- `src/agents/nodes/knowledge_node.py`
+- `src/agents/nodes/support_node.py`
+- `src/agents/nodes/sentiment_node.py`
 
-## 3) Message Flow
+### Guardrails
+- `src/agents/guardrails/input_guard.py`
+- `src/agents/guardrails/output_guard.py`
+- `src/agents/guardrails/blocklist.py`
 
-1. Client sends `POST /v1/chat`.
-2. Input guard checks injection/unsafe patterns.
-3. Router classifies intent and route.
-4. One specialized node runs:
-   - `knowledge`
-   - `support`
-   - `sentiment`
-5. Finalization/personality layer is applied through prompt style rules plus output guard sanitization.
-6. API returns `ChatResponse`.
+### Agent Tools
+- `src/agents/tools/knowledge_tools.py`
+- `src/agents/tools/support_tools.py`
+- `src/agents/tools/sentiment_tools.py`
 
-Challenge diagram mapping:
-- Router node: `router_node.py`
-- Specialized agents: `knowledge_node.py`, `support_node.py`, `sentiment_node.py`
-- Agent tools: `src/agents/tools/*.py`
-- Personality/output stage: agent prompt style + `output_guard.py`
+### Domain and Infrastructure
+- Ports/interfaces: `src/domain/ports/`
+- Models/enums: `src/domain/models/`
+- Repositories: `src/infrastructure/persistence/`
+- Search adapter: `src/infrastructure/search/brave_searcher.py`
+- Vector adapter: `src/infrastructure/vector_store/chroma_store.py`
+- WhatsApp bridge/session store: `src/infrastructure/whatsapp/`
 
-## 4) Routing Hardening and Fallback Policy
+### RAG Ingestion
+- `src/rag/scraper.py`
+- `src/rag/chunker.py`
+- `src/rag/ingest_pipeline.py`
+- `scripts/ingest.py`
 
-### Deterministic Router Override
+## 4) Runtime Flow (Actual)
 
-The router includes a deterministic path for operational status/outage language.
-Requests like service-status/instability/down now force route to `support`.
+### Standard chat endpoint
+1. Client sends `POST /v1/chat` with `message`, `user_id` (optional profile fields too).
+2. API builds initial LangGraph state.
+3. `input_guard` validates request safety.
+4. `router` classifies route (`knowledge`, `support`, `escalation`).
+5. Specialized agent runs.
+6. `output_guard` sanitizes output.
+7. API returns `ChatResponse`.
 
-Why:
-- avoids ambiguous LLM-only classification for a critical support case
-- prevents user-facing dead-end fallback from knowledge path
+### Streaming endpoint
+- `POST /v1/chat/stream` streams:
+  - status events (`event: status`)
+  - token chunks (`event: token`)
+  - final payload (`event: final`)
+  - completion marker (`event: done`)
 
-### Knowledge Overlap Safety Fallback
+## 5) Agent Graph Diagram (for Excalidraw)
 
-Knowledge node detects support-style operational/account overlap text.
-If misrouted, it returns a support/handoff guidance response directly and skips LLM/tool execution for that turn.
+```text
+                      +------------------+
+                      |      START       |
+                      +---------+--------+
+                                |
+                                v
+                     +----------+-----------+
+                     |     INPUT_GUARD      |
+                     +----------+-----------+
+                                |
+                   blocked=true | blocked=false
+                                |
+                +---------------+----------------+
+                |                                |
+                v                                v
+             +--+---+                     +------+------+
+             | END  |                     |    ROUTER   |
+             +------+                     +------+------+
+                                               |
+                            +------------------+------------------+
+                            |                  |                  |
+                            v                  v                  v
+                   +--------+------+   +-------+------+   +-------+------+
+                   |  KNOWLEDGE    |   |   SUPPORT     |   |  SENTIMENT   |
+                   |    NODE       |   |    NODE       |   |    NODE      |
+                   +--------+------+   +-------+------+   +-------+------+
+                            \                |                   /
+                             \               |                  /
+                              \              |                 /
+                               v             v                v
+                            +------------------------------------+
+                            |            OUTPUT_GUARD            |
+                            +----------------+-------------------+
+                                             |
+                                             v
+                                          +--+--+
+                                          | END |
+                                          +-----+
+```
 
-Why:
-- safer behavior under uncertain route boundaries
-- avoids generic "knowledge not found" loops for operational incidents
+## 6) System Context Diagram (for Excalidraw)
 
-## 5) Design Tradeoffs
+```text
++-------------------+        HTTPS         +---------------------------+
+|   Web Frontend    +--------------------->+      FastAPI Backend      |
+| (React, Sidebar,  |<---------------------+  /v1/chat, /v1/chat/stream|
+|  Auth, SSE UI)    |      JSON + SSE      |  /v1/health, webhooks     |
++---------+---------+                      +-------------+-------------+
+          |                                                 |
+          |                                                 |
+          |                                   +-------------v-------------+
+          |                                   |     LangGraph Swarm       |
+          |                                   | input_guard -> router ->  |
+          |                                   | specialized agents -> out |
+          |                                   +------+------+------+-------+
+          |                                          |      |      |
+          |                                          |      |      |
+          |                                  +-------v+   +-v------+-------+
+          |                                  | Chroma  |   | Brave Search   |
+          |                                  |   DB    |   | API Adapter    |
+          |                                  +---------+   +----------------+
+          |                                          |
+          |                                  +-------v--------+
+          |                                  | SQLite Checkpt |
+          |                                  +----------------+
+          |
+          | optional human handoff
+          |
+          v
++---------------------+      webhook/events      +-----------------------+
+|  Evolution API      +------------------------->+ /v1/webhook +         |
+|  (WhatsApp bridge)  |<-------------------------+ /v1/webhook/whatsapp  |
++---------------------+      outbound send       | /v1/messages/*        |
+                                                 +-----------------------+
+```
 
-- LangGraph state machine instead of ad-hoc function chaining:
-  - pro: explicit route graph and maintainable flow
-  - con: additional abstraction overhead
+## 7) Request Lifecycle (Presentation Script)
 
-- Embedded Chroma + SQLite defaults:
-  - pro: local/dev simplicity and reproducibility
-  - con: requires persistent volume setup in production
+```text
+Client -> POST /v1/chat
+  -> build AgentState
+  -> input_guard
+  -> router
+       if support/outage terms => deterministic support override
+  -> selected agent node
+       knowledge:
+         - InfinitePay query => RAG
+         - general query => deterministic Brave search path
+         - support-overlap => safe support handoff guidance
+       support:
+         - account and ticket tools
+       sentiment:
+         - urgency/frustration analysis + escalation trigger
+  -> output_guard
+  -> return ChatResponse {response, agent_used, intent, language, metadata}
+```
 
-- Mixed-model strategy by role:
-  - pro: cost/performance tuning by agent task
-  - con: multi-provider configuration complexity
+## 8) WhatsApp Escalation and Human Handoff
 
-## 6) Quality and Verification
+Current policy:
+- Human continuity is asynchronous by design.
+- Escalation response informs user that continuation happens via WhatsApp/email.
+- Operator receives enriched handoff message with:
+  - session ID
+  - escalation reason
+  - customer name
+  - customer email
+  - customer phone
 
-- Unit + integration test suite under `tests/`
-- Prompt-level evaluation via `promptfooconfig.yaml`
-- Added automated checks for:
-  - deterministic support routing for service status/outage prompts
-  - removal of unsupported quick suggestion in UI
-  - knowledge overlap fallback behavior
+Key files:
+- `src/api/v1/routes/chat.py`
+- `src/api/v1/routes/webhook.py`
+- `src/api/v1/routes/escalation.py`
+- `src/infrastructure/whatsapp/session_store.py`
 
-## 7) Known Limits and Next Steps
+## 9) Hardening Implemented (Important for Evaluator)
 
-- Observability can be expanded (structured metrics/tracing).
-- Frontend e2e automation can be added for full escalation round-trip validation.
-- Retrieval quality can be extended with reranking/hybrid search.
+### Router deterministic support override
+- Service status/outage/instability prompts are forced to `support`.
+- Prevents low-quality route ambiguity for operational incidents.
+
+File:
+- `src/agents/nodes/router_node.py`
+
+### Knowledge overlap fallback
+- If support-style operational issues reach knowledge node, it avoids dead-end fallback and points to support/handoff flow.
+
+File:
+- `src/agents/nodes/knowledge_node.py`
+
+### Deterministic general web path
+- Non-InfinitePay questions trigger direct Brave web path in knowledge node.
+- Includes echo-response detection fallback.
+
+File:
+- `src/agents/nodes/knowledge_node.py`
+
+## 10) Docker and Runtime Topology
+
+From `docker-compose.yml`:
+- `infinity-agent` always available.
+- `evolution-api` optional under `--profile whatsapp`.
+- Persistent volumes:
+  - `chroma_data`
+  - `sqlite_data`
+  - `evolution_instances` (optional profile)
+
+Standard evaluator run:
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Optional WhatsApp profile:
+```bash
+docker compose --profile whatsapp up -d evolution-api
+```
+
+## 11) OpenAPI and Observability Entry Points
+
+- Swagger UI: `/docs`
+- ReDoc: `/redoc`
+- Health: `GET /v1/health`
+- Knowledge admin preview: `GET /v1/admin/knowledge`
+
+## 12) Excalidraw Build Guide (Quick)
+
+Use these conventions when drawing:
+- Green boxes: routing/control (`router`, guards)
+- Orange boxes: specialized agents
+- Blue cylinders: data stores (Chroma, SQLite)
+- Purple external boxes: providers (Brave, OpenRouter, Evolution)
+- Solid arrows: synchronous runtime path
+- Dashed arrows: optional/asynchronous handoff path
+
+Recommended slide order:
+1. System context diagram
+2. Agent graph diagram
+3. Request lifecycle timeline
+4. RAG ingestion/retrieval view
+5. Human handoff sequence
+
+## 13) 10-15 Minute Presentation Script
+
+### Minute 0-2: Problem and architecture
+- Explain challenge goals.
+- Show system context diagram.
+
+### Minute 2-5: Swarm internals
+- Show graph diagram.
+- Explain Router and deterministic support override.
+- Explain guardrails and specialized nodes.
+
+### Minute 5-8: Knowledge and support behavior
+- Show RAG and Brave path.
+- Show support tools and seeded mock users.
+
+### Minute 8-10: Human handoff
+- Explain escalation trigger and asynchronous continuity policy.
+- Show operator notification data fields.
+
+### Minute 10-12: DevOps and testability
+- Show Docker run path and OpenAPI docs.
+- Mention test suite + prompt evaluation + smoke script.
+
+### Minute 12-15: Live scenarios
+- Product Q&A
+- Service-status operational support route
+- Human escalation request
+- One general-web question
+
+## 14) Final Notes
+
+- This file is intentionally implementation-driven, not aspirational.
+- If behavior changes, update this document together with `README.md` and `docs/AGENTS.md`.

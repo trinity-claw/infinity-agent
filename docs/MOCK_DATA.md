@@ -15,6 +15,9 @@ Source:
 | `client002` | Active PJ, higher volume | transfer/pending transaction checks |
 | `client003` | Inactive account | blocked account / documentation issue |
 | `client004` | Active PJ (link de pagamento) | payment-link support scenarios |
+| `client_pelissarog_gmail_com` | Active PF account (demo owner) | escalation/handoff demo, WhatsApp contact enrichment |
+| `client_pelissarog_gmail.com` | Alias ID for same profile | compatibility with historical session identifiers |
+| `client_peli` | Short alias for same profile | quick manual demo ID |
 
 ## Frontend Default
 
@@ -40,3 +43,5 @@ Use this with `user_id=client003`:
 - Restarting the process resets tickets created during the session.
 - If the evaluator uses a non-seeded `user_id`, support tools will return "user not found".
   For a successful support walkthrough, use one of the seeded IDs above (recommended: `client789`).
+- `InMemoryUserRepository` also attempts normalized ID matching (alphanumeric only),
+  which improves compatibility for IDs coming from email-derived sanitization.

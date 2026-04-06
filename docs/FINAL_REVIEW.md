@@ -2,7 +2,7 @@
 
 Last updated: 2026-04-06  
 Repository branch: `main`  
-Reviewed commit: `e535630`
+Reviewed baseline commit: `9f169f6`
 
 ## 1) Executive Summary
 
@@ -56,7 +56,7 @@ This final review covered:
 6. API returns structured `ChatResponse`.
 
 Graph orchestrator: `src/agents/graph.py`  
-Active architecture reference: root `architecture_review.md`
+Active architecture reference: root `architecture_review.md` (presentation-grade Excalidraw guide)
 
 ### 4.2 Hardening Implemented
 

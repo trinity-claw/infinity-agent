@@ -44,7 +44,7 @@ Deterministic override:
 ## Knowledge Agent
 
 Model:
-- `KNOWLEDGE_MODEL` (default `openai/gpt-4o-mini`)
+- `KNOWLEDGE_MODEL` (default `google/gemini-2.5-flash`)
 
 Tools:
 - `search_knowledge_base`
@@ -53,6 +53,8 @@ Tools:
 Responsibilities:
 - product/service Q&A grounded in RAG context
 - general web Q&A for non-InfinitePay topics
+- deterministic web path for non-InfinitePay queries (Brave Search)
+- echo-response avoidance fallback for low-value output
 
 Safety overlap fallback:
 - if a support-style operational issue reaches this node by mistake, the node returns a support/handoff guidance response directly.

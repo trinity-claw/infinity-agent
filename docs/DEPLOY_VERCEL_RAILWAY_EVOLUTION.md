@@ -33,10 +33,14 @@ LOG_LEVEL=INFO
 
 OPENROUTER_API_KEY=sk-or-v1-...
 ROUTER_MODEL=openai/gpt-4o-mini
-KNOWLEDGE_MODEL=openai/gpt-4o-mini
+KNOWLEDGE_MODEL=google/gemini-2.5-flash
 SUPPORT_MODEL=anthropic/claude-sonnet-4.5
 SENTIMENT_MODEL=openai/gpt-4o-mini
 GUARDRAIL_MODEL=openai/gpt-4o-mini
+EMBEDDING_MODEL=openai/text-embedding-3-small
+
+BRAVE_SEARCH_API_KEY=your-brave-api-key
+BRAVE_SEARCH_BASE_URL=https://api.search.brave.com/res/v1/web/search
 
 CHROMA_PERSIST_DIR=/app/data/chroma_db
 SQLITE_DB_PATH=/app/data/sqlite_db/langgraph.sqlite

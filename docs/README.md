@@ -24,4 +24,4 @@ This folder contains evaluator-facing technical documentation.
 ## Architecture Review
 
 - Root `architecture_review.md`
-  - Current architecture review for this implementation.
+  - Current architecture review plus Excalidraw diagram guide and 10-15 min presentation script.
