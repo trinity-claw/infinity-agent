@@ -67,7 +67,8 @@ Request:
   "user_id": "client_123",
   "user_name": "User Name",
   "user_email": "user@example.com",
-  "session_id": null
+  "session_id": null,
+  "session_token": null
 }
 ```
 
@@ -92,9 +93,15 @@ Response:
 - `GET /v1/health`
 - `POST /v1/escalation/session/start`
 - `GET /v1/escalation/session/{session_id}`
+- `GET /v1/messages/{session_id}` (requires `session_token`)
+- `POST /v1/messages/{session_id}` (requires `session_token`)
 - `POST /v1/webhook` (Evolution API inbound)
 
 OpenAPI docs: `/docs`
+
+Sensitive-route auth policy:
+- In `production`, sensitive routes require `X-API-Key` (or `apikey`) matching `SENSITIVE_API_KEY`.
+- In non-production environments, this check is bypassed for local development.
 
 ## Local Development
 
@@ -119,6 +126,12 @@ Minimum required variables:
 ```env
 OPENROUTER_API_KEY=sk-or-v1-...
 BRAVE_SEARCH_API_KEY=your-brave-api-key
+```
+
+Recommended in production:
+
+```env
+SENSITIVE_API_KEY=change-this-in-production
 ```
 
 Ingest knowledge base:

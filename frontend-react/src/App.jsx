@@ -109,6 +109,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [streamStatus, setStreamStatus] = useState('');
   const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('infinity_active_session_id'));
+  const [activeSessionToken, setActiveSessionToken] = useState(() => localStorage.getItem('infinity_active_session_token'));
   const pollCursorRef = useRef(0);
 
   useEffect(() => {
@@ -147,20 +148,43 @@ function App() {
   }, [activeSessionId]);
 
   useEffect(() => {
+    if (activeSessionId && !activeSessionToken) {
+      setActiveSessionId(null);
+    }
+  }, [activeSessionId, activeSessionToken]);
+
+  useEffect(() => {
     if (activeSessionId) {
       localStorage.setItem('infinity_active_session_id', activeSessionId);
     } else {
       localStorage.removeItem('infinity_active_session_id');
+      localStorage.removeItem('infinity_active_session_token');
+      setActiveSessionToken(null);
     }
   }, [activeSessionId]);
+
+  useEffect(() => {
+    if (activeSessionToken) {
+      localStorage.setItem('infinity_active_session_token', activeSessionToken);
+    } else {
+      localStorage.removeItem('infinity_active_session_token');
+    }
+  }, [activeSessionToken]);
 
   useEffect(() => {
     let pollingInterval;
     if (activeSessionId) {
       pollingInterval = setInterval(async () => {
         try {
+          if (!activeSessionToken) {
+            return;
+          }
           const since = pollCursorRef.current;
-          const response = await fetch(apiUrl(`/v1/messages/${activeSessionId}?since=${since}`));
+          const response = await fetch(apiUrl(`/v1/messages/${activeSessionId}?since=${since}`), {
+            headers: {
+              'x-session-token': activeSessionToken,
+            },
+          });
           if (response.ok) {
             const data = await response.json();
             if (data.messages && data.messages.length > 0) {
@@ -183,6 +207,9 @@ function App() {
             }
           } else if (response.status === 404) {
             setActiveSessionId(null);
+          } else if (response.status === 403) {
+            setActiveSessionId(null);
+            setActiveSessionToken(null);
           }
         } catch (error) {
           console.error('Polling error', error);
@@ -190,7 +217,7 @@ function App() {
       }, 3000);
     }
     return () => clearInterval(pollingInterval);
-  }, [activeSessionId]);
+  }, [activeSessionId, activeSessionToken]);
 
   const handleSendMessage = async (text) => {
     const trimmed = text?.trim();
@@ -222,6 +249,7 @@ function App() {
       if (userProfile?.name) payload.user_name = userProfile.name;
       if (userProfile?.email) payload.user_email = userProfile.email;
       if (activeSessionId) payload.session_id = activeSessionId;
+      if (activeSessionToken) payload.session_token = activeSessionToken;
 
       const response = await fetch(apiUrl('/v1/chat/stream'), {
         method: 'POST',
@@ -288,8 +316,13 @@ function App() {
         throw new Error('Streaming finalizado sem payload final.');
       }
 
-      if (finalPayload.metadata?.escalated && finalPayload.metadata?.session_id) {
+      if (
+        finalPayload.metadata?.escalated
+        && finalPayload.metadata?.session_id
+        && finalPayload.metadata?.session_token
+      ) {
         setActiveSessionId(finalPayload.metadata.session_id);
+        setActiveSessionToken(finalPayload.metadata.session_token);
       }
     } catch (error) {
       const detail = error instanceof Error && error.message ? `\n\nDetalhes: ${error.message}` : '';
@@ -326,7 +359,9 @@ function App() {
     if (confirm('Tem certeza que deseja apagar todo o histórico?')) {
       setMessages([]);
       setActiveSessionId(null);
+      setActiveSessionToken(null);
       localStorage.removeItem('infinity_active_session_id');
+      localStorage.removeItem('infinity_active_session_token');
     }
   };
 
@@ -335,9 +370,11 @@ function App() {
     setIsAuthenticated(true);
     setMessages([]);
     setActiveSessionId(null);
+    setActiveSessionToken(null);
     setIsSidebarOpenMobile(false);
     localStorage.removeItem('infinity_chat_history');
     localStorage.removeItem('infinity_active_session_id');
+    localStorage.removeItem('infinity_active_session_token');
     ensureUserId(profile);
   };
 
@@ -348,11 +385,13 @@ function App() {
     localStorage.removeItem('infinity_auth_picture');
     localStorage.removeItem('infinity_chat_history');
     localStorage.removeItem('infinity_active_session_id');
+    localStorage.removeItem('infinity_active_session_token');
 
     setIsAuthenticated(false);
     setUserProfile(null);
     setMessages([]);
     setActiveSessionId(null);
+    setActiveSessionToken(null);
     setIsSidebarOpenMobile(false);
   };
 
