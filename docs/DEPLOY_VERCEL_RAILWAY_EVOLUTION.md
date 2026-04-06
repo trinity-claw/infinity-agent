@@ -71,8 +71,14 @@ Attach persistent volume to `/app/data`.
 ```env
 VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 VITE_ALLOWED_EMAILS=you@example.com,another@example.com
+VITE_ALLOWED_EMAIL_CONTAINS=le,leo,frisso
 VITE_API_BASE_URL=https://YOUR_BACKEND.railway.app
 ```
+
+Access rules:
+- Exact allowlist via `VITE_ALLOWED_EMAILS`.
+- Pattern allowlist via `VITE_ALLOWED_EMAIL_CONTAINS` (matches email local-part or Google display name).
+- If both are empty, Google login is open.
 
 ### 3.3 Validate Frontend
 

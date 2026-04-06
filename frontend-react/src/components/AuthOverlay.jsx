@@ -3,12 +3,39 @@ import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from 'jwt-decode';
 
 const normalizeEmail = (value = '') => value.trim().toLowerCase();
+const normalizeText = (value = '') =>
+  value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 const deriveUserIdFromEmail = (email) => {
   const normalized = normalizeEmail(email);
   if (!normalized) return 'client_web';
   const sanitized = normalized.replace(/[^a-z0-9]/g, '_').slice(0, 40);
   return `client_${sanitized}`;
+};
+
+const isEmailAllowed = ({ email, displayName, allowedEmails, allowedContainsTokens }) => {
+  if (!email) return false;
+
+  if (allowedEmails.length === 0 && allowedContainsTokens.length === 0) {
+    return true;
+  }
+
+  if (allowedEmails.includes(email)) {
+    return true;
+  }
+
+  if (allowedContainsTokens.length > 0) {
+    const localPart = email.split('@')[0] || '';
+    const candidate = normalizeText(`${localPart} ${displayName || ''}`);
+    const matchesToken = allowedContainsTokens.some((token) => candidate.includes(token));
+    if (matchesToken) return true;
+  }
+
+  return false;
 };
 
 const AuthOverlay = ({ onAuthSuccess }) => {
@@ -20,6 +47,15 @@ const AuthOverlay = ({ onAuthSuccess }) => {
       (import.meta.env.VITE_ALLOWED_EMAILS || '')
         .split(',')
         .map(normalizeEmail)
+        .filter(Boolean),
+    [],
+  );
+
+  const allowedEmailContainsTokens = useMemo(
+    () =>
+      (import.meta.env.VITE_ALLOWED_EMAIL_CONTAINS || '')
+        .split(',')
+        .map(normalizeText)
         .filter(Boolean),
     [],
   );
@@ -39,15 +75,24 @@ const AuthOverlay = ({ onAuthSuccess }) => {
         return;
       }
 
-      const isAllowed = allowedEmails.length === 0 || allowedEmails.includes(email);
+      const displayName = decodedUser?.name?.trim() || '';
+      const isAllowed = isEmailAllowed({
+        email,
+        displayName,
+        allowedEmails,
+        allowedContainsTokens: allowedEmailContainsTokens,
+      });
+
       if (!isAllowed) {
-        setErrorMsg('Acesso restrito. Este e-mail nao esta na allowlist.');
+        setErrorMsg(
+          'Acesso restrito. Este e-mail nao atende as regras de autorizacao configuradas.',
+        );
         return;
       }
 
       const profile = {
         email,
-        name: decodedUser?.name?.trim() || email.split('@')[0],
+        name: displayName || email.split('@')[0],
         picture: decodedUser?.picture || '',
       };
 
@@ -105,7 +150,9 @@ const AuthOverlay = ({ onAuthSuccess }) => {
           )}
         </div>
 
-        <p className="auth-footer">Acesso permitido apenas para e-mails autorizados.</p>
+        <p className="auth-footer">
+          Acesso permitido apenas para e-mails autorizados por allowlist/padrao.
+        </p>
       </div>
     </div>
   );

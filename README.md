@@ -144,12 +144,30 @@ Frontend env (`frontend-react/.env`):
 ```env
 VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 VITE_ALLOWED_EMAILS=you@example.com,another@example.com
+VITE_ALLOWED_EMAIL_CONTAINS=le,leo,frisso
 VITE_API_BASE_URL=http://localhost:8000
 ```
+
+Authentication policy:
+- `VITE_ALLOWED_EMAILS`: exact allowlist (comma-separated).
+- `VITE_ALLOWED_EMAIL_CONTAINS`: token-based allowlist (comma-separated).  
+  Login is allowed when the email local part (before `@`) or Google display name contains any token.
+- If both variables are empty, login is open to any Google account.
 
 Evaluator tip:
 - Sidebar defaults to `user_id=client789` so support flows work immediately with seeded mock data.
 - Full mock account list: `docs/MOCK_DATA.md`.
+
+### Evaluator Authentication Experience (End-to-End)
+
+1. Evaluator opens the app.
+2. Google login modal appears.
+3. The app decodes the Google credential and applies access rules:
+   - exact email match against `VITE_ALLOWED_EMAILS`, or
+   - token match against `VITE_ALLOWED_EMAIL_CONTAINS`.
+4. On success, evaluator profile is stored locally and chat is unlocked.
+5. The app auto-assigns a deterministic `user_id` from email (if not already set).
+6. Evaluator can immediately test support flows using seeded users (`client789`, etc.).
 
 ## Docker
 
