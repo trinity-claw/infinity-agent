@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from src.agents.prompts.knowledge_prompt import KNOWLEDGE_SYSTEM_PROMPT
 from src.agents.state import AgentState
@@ -30,6 +30,22 @@ _SUPPORT_OVERLAP_PATTERNS = (
     r"\bi can't\b.{0,30}\b(sign in|login|transfer|pay)\b",
 )
 
+_INFINITEPAY_PATTERNS = (
+    r"\binfinitepay\b",
+    r"\bmaquininha\b",
+    r"\binfinitetap\b",
+    r"\bpix\b",
+    r"\blink de pagamento\b",
+    r"\bconta digital\b",
+    r"\bconta pj\b",
+    r"\bcartao\b",
+    r"\bemprestimo\b",
+    r"\brendimento\b",
+    r"\bpdv\b",
+    r"\bbolet[oa]\b",
+    r"\btaxa(s)?\b",
+)
+
 
 def _is_support_overlap_query(message: str) -> bool:
     """Detect support-style operational issues that were misrouted to knowledge."""
@@ -37,6 +53,23 @@ def _is_support_overlap_query(message: str) -> bool:
         return False
     text = message.lower()
     return any(re.search(pattern, text) for pattern in _SUPPORT_OVERLAP_PATTERNS)
+
+
+def _is_infinitepay_query(message: str) -> bool:
+    """Detect likely InfinitePay/domain queries."""
+    if not message:
+        return False
+    text = message.lower()
+    return any(re.search(pattern, text) for pattern in _INFINITEPAY_PATTERNS)
+
+
+def _looks_like_echo_response(user_message: str, llm_response: str) -> bool:
+    """Detect low-value response patterns (e.g., plain echo)."""
+    if not llm_response:
+        return True
+    normalized_user = re.sub(r"\s+", " ", user_message.strip().lower())
+    normalized_llm = re.sub(r"\s+", " ", llm_response.strip().lower())
+    return normalized_llm == normalized_user
 
 
 def _build_support_overlap_message(message: str) -> str:
@@ -159,6 +192,66 @@ def create_knowledge_node(
                         name="knowledge",
                     )
                 ],
+            }
+
+        # No tool calls - force web search for out-of-domain/general questions.
+        if (
+            user_message
+            and not _is_infinitepay_query(user_message)
+            and _looks_like_echo_response(user_message, str(response.content or ""))
+        ):
+            logger.info(
+                "Knowledge forced web-search fallback (echo/no-tool) message=%s",
+                user_message[:120],
+            )
+            web_results = await web_searcher.search(user_message, max_results=5)
+            if web_results:
+                formatted = "\n\n".join(
+                    [
+                        f"{idx}. {item.title}\n{item.snippet}\nURL: {item.url}"
+                        for idx, item in enumerate(web_results, start=1)
+                    ]
+                )
+                synthesis_prompt = (
+                    "Use only the web results below to answer the user. "
+                    "Be concise, mention that the information comes from web sources, "
+                    "and include the URLs when useful.\n\n"
+                    f"Web results:\n{formatted}"
+                )
+                forced_response = await get_knowledge_llm().ainvoke(
+                    [
+                        SystemMessage(content=synthesis_prompt),
+                        HumanMessage(content=user_message),
+                    ]
+                )
+                return {
+                    "messages": [
+                        AIMessage(
+                            content=str(forced_response.content or "").strip(),
+                            name="knowledge",
+                        )
+                    ],
+                    "metadata": {
+                        **state.get("metadata", {}),
+                        "knowledge_forced_web_search": True,
+                    },
+                }
+
+            return {
+                "messages": [
+                    AIMessage(
+                        content=(
+                            "Nao consegui recuperar fontes web confiaveis agora. "
+                            "Tente reformular a pergunta ou tente novamente em instantes."
+                        ),
+                        name="knowledge",
+                    )
+                ],
+                "metadata": {
+                    **state.get("metadata", {}),
+                    "knowledge_forced_web_search": True,
+                    "knowledge_web_search_empty": True,
+                },
             }
 
         # No tool calls - LLM answered directly.

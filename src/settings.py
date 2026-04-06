@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # --- Embeddings ---
     embedding_model: str = "openai/text-embedding-3-small"
 
+    # --- Web Search (Brave) ---
+    brave_search_api_key: str = ""
+    brave_search_base_url: str = "https://api.search.brave.com/res/v1/web/search"
+
     # --- ChromaDB ---
     chroma_persist_dir: str = "./data/chroma_db"
 

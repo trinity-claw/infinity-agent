@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Request
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 import src.container as container
 from src.agents.swarm_config import build_swarm_config
@@ -93,11 +93,16 @@ async def process_whatsapp_message(phone: str, text: str, message_id: str) -> No
 
         response_text = ""
         for msg in reversed(result.get("messages", [])):
-            if hasattr(msg, "content") and msg.content:
-                name = getattr(msg, "name", "")
-                if name not in ("router",):
-                    response_text = msg.content
-                    break
+            if not isinstance(msg, AIMessage):
+                continue
+            content = (getattr(msg, "content", "") or "").strip()
+            if not content:
+                continue
+            name = (getattr(msg, "name", "") or "").strip()
+            if name == "router":
+                continue
+            response_text = content
+            break
 
         if not response_text:
             response_text = "Desculpe, ocorreu um erro ao processar sua solicitacao."

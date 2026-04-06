@@ -43,7 +43,7 @@ Evidence:
 - RAG ingestion and chunking: `src/rag/`
 - Vector store adapter: `src/infrastructure/vector_store/chroma_store.py`
 - Knowledge tools: `src/agents/tools/knowledge_tools.py`
-- Web search adapter: `src/infrastructure/search/duckduckgo_searcher.py`
+- Web search adapter: `src/infrastructure/search/brave_searcher.py`
 
 ## 4) Support Agent with 2+ Tools
 

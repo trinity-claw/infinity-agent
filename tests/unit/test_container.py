@@ -81,7 +81,7 @@ async def test_get_swarm_falls_back_to_none_when_checkpointer_init_fails():
         "langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver.from_conn_string",
         side_effect=RuntimeError("db down"),
     ), patch("src.container.get_knowledge_store", return_value=object()), patch(
-        "src.container.DuckDuckGoSearcher", return_value=object()
+        "src.container.BraveSearcher", return_value=object()
     ), patch(
         "src.container.InMemoryUserRepository", return_value=object()
     ), patch(

@@ -88,6 +88,7 @@ Response:
 ```
 
 ### Other routes
+- `POST /v1/chat/stream` (SSE status + chunked response streaming)
 - `GET /v1/health`
 - `POST /v1/escalation/session/start`
 - `GET /v1/escalation/session/{session_id}`
@@ -113,10 +114,11 @@ uv pip install -e .
 cp .env.example .env
 ```
 
-Minimum required variable:
+Minimum required variables:
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-...
+BRAVE_SEARCH_API_KEY=your-brave-api-key
 ```
 
 Ingest knowledge base:
@@ -202,10 +204,10 @@ If you already have an external Evolution API instance, keep the profile disable
 
 ### Evaluator Quick Start (5-Minute Path)
 
-1. Configure API key:
+1. Configure API keys:
 ```bash
 cp .env.example .env
-# edit .env and set OPENROUTER_API_KEY
+# edit .env and set OPENROUTER_API_KEY + BRAVE_SEARCH_API_KEY
 ```
 2. Start services:
 ```bash

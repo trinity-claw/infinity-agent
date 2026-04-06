@@ -43,6 +43,57 @@ const ensureUserId = (profile) => {
   return fallbackUserId;
 };
 
+const parseSseEvents = async (response, handlers = {}) => {
+  if (!response.body) {
+    throw new Error('Streaming body unavailable.');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop() || '';
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      let eventName = 'message';
+      let dataText = '';
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim();
+          continue;
+        }
+        if (line.startsWith('data:')) {
+          dataText += line.slice(5).trim();
+        }
+      }
+
+      if (!dataText) continue;
+
+      let payload;
+      try {
+        payload = JSON.parse(dataText);
+      } catch {
+        continue;
+      }
+
+      const handler = handlers[eventName];
+      if (typeof handler === 'function') {
+        handler(payload);
+      }
+    }
+  }
+};
+
 function App() {
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -56,6 +107,7 @@ function App() {
   const [userProfile, setUserProfile] = useState(() => getStoredProfile());
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [streamStatus, setStreamStatus] = useState('');
   const [activeSessionId, setActiveSessionId] = useState(() => localStorage.getItem('infinity_active_session_id'));
   const pollCursorRef = useRef(0);
 
@@ -145,8 +197,20 @@ function App() {
     if (!trimmed) return;
 
     const userMsg = { sender: 'user', text: trimmed, timestamp: new Date().toISOString() };
-    setMessages((prev) => [...prev, userMsg]);
+    const draftId = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      {
+        id: draftId,
+        sender: 'bot',
+        text: '',
+        agent: 'processing',
+        timestamp: new Date().toISOString(),
+      },
+    ]);
     setIsTyping(true);
+    setStreamStatus('Iniciando atendimento...');
 
     try {
       const userId = ensureUserId(userProfile);
@@ -159,9 +223,12 @@ function App() {
       if (userProfile?.email) payload.user_email = userProfile.email;
       if (activeSessionId) payload.session_id = activeSessionId;
 
-      const response = await fetch(apiUrl('/v1/chat'), {
+      const response = await fetch(apiUrl('/v1/chat/stream'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        },
         body: JSON.stringify(payload),
       });
 
@@ -176,34 +243,68 @@ function App() {
         throw new Error(detail);
       }
 
-      const data = await response.json();
+      let finalPayload = null;
+      let streamError = null;
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: data.response,
-          agent: data.agent_used,
-          metadata: data.metadata,
-          timestamp: data.timestamp,
+      await parseSseEvents(response, {
+        status: (payloadData) => {
+          if (payloadData?.message) {
+            setStreamStatus(payloadData.message);
+          }
         },
-      ]);
+        token: (payloadData) => {
+          const delta = payloadData?.delta || '';
+          if (!delta) return;
+          setMessages((prev) => prev.map((msg) => (
+            msg.id === draftId
+              ? { ...msg, text: `${msg.text || ''}${delta}` }
+              : msg
+          )));
+        },
+        final: (payloadData) => {
+          finalPayload = payloadData;
+          setMessages((prev) => prev.map((msg) => (
+            msg.id === draftId
+              ? {
+                  ...msg,
+                  text: payloadData?.response || msg.text || '',
+                  agent: payloadData?.agent_used || 'unknown',
+                  metadata: payloadData?.metadata || {},
+                  timestamp: payloadData?.timestamp || msg.timestamp,
+                }
+              : msg
+          )));
+        },
+        error: (payloadData) => {
+          streamError = payloadData?.detail || 'Erro de streaming';
+        },
+      });
 
-      if (data.metadata?.escalated && data.metadata?.session_id) {
-        setActiveSessionId(data.metadata.session_id);
+      if (streamError) {
+        throw new Error(streamError);
+      }
+
+      if (!finalPayload) {
+        throw new Error('Streaming finalizado sem payload final.');
+      }
+
+      if (finalPayload.metadata?.escalated && finalPayload.metadata?.session_id) {
+        setActiveSessionId(finalPayload.metadata.session_id);
       }
     } catch (error) {
       const detail = error instanceof Error && error.message ? `\n\nDetalhes: ${error.message}` : '';
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: `Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.${detail}`,
-          agent: 'error',
-        },
-      ]);
+      setMessages((prev) => prev.map((msg) => (
+        msg.id === draftId
+          ? {
+              ...msg,
+              text: `Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.${detail}`,
+              agent: 'error',
+            }
+          : msg
+      )));
     } finally {
       setIsTyping(false);
+      setStreamStatus('');
     }
   };
 
@@ -289,6 +390,7 @@ function App() {
             <ChatArea
               messages={messages}
               typing={isTyping}
+              streamStatus={streamStatus}
               onSendMessage={handleSendMessage}
               userProfile={userProfile}
               onToggleSidebar={handleToggleSidebar}

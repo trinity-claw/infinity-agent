@@ -12,7 +12,7 @@ from typing import Any
 
 from src.infrastructure.persistence.in_memory_ticket_repo import InMemoryTicketRepository
 from src.infrastructure.persistence.in_memory_user_repo import InMemoryUserRepository
-from src.infrastructure.search.duckduckgo_searcher import DuckDuckGoSearcher
+from src.infrastructure.search.brave_searcher import BraveSearcher
 from src.infrastructure.vector_store.chroma_store import ChromaKnowledgeStore
 from src.settings import settings
 
@@ -113,7 +113,10 @@ async def get_swarm():
 
         _swarm = build_swarm(
             knowledge_store=get_knowledge_store(),
-            web_searcher=DuckDuckGoSearcher(),
+            web_searcher=BraveSearcher(
+                api_key=settings.brave_search_api_key,
+                base_url=settings.brave_search_base_url,
+            ),
             user_repo=InMemoryUserRepository(),
             ticket_repo=InMemoryTicketRepository(),
             checkpointer=checkpointer,

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import infinitePayLogo from '../logo.svg';
 
-const ChatArea = ({ messages, typing, onSendMessage, userProfile, onToggleSidebar }) => {
+const ChatArea = ({ messages, typing, streamStatus, onSendMessage, userProfile, onToggleSidebar }) => {
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -20,6 +20,8 @@ const ChatArea = ({ messages, typing, onSendMessage, userProfile, onToggleSideba
       knowledge: '<span class="agent-badge badge-knowledge">Knowledge</span>',
       sentiment: '<span class="agent-badge badge-sentiment">Sentiment</span>',
       guardrail: '<span class="agent-badge badge-guardrail">Guardrail</span>',
+      processing: '<span class="agent-badge badge-router">Processing</span>',
+      unknown: '<span class="agent-badge badge-router">Agent</span>',
     };
     return badges[agent?.toLowerCase()] || '';
   };
@@ -101,7 +103,7 @@ const ChatArea = ({ messages, typing, onSendMessage, userProfile, onToggleSideba
           const roleClass = isUser ? 'user' : 'agent';
 
           return (
-            <div key={index} className={`message ${roleClass}`}>
+            <div key={msg.id || index} className={`message ${roleClass}`}>
               <div className="msg-avatar">
                 {isUser ? (
                   'EU'
@@ -170,6 +172,7 @@ const ChatArea = ({ messages, typing, onSendMessage, userProfile, onToggleSideba
               <span></span>
               <span></span>
             </div>
+            {streamStatus && <div className="typing-status">{streamStatus}</div>}
           </div>
         )}
         <div ref={messagesEndRef} />
